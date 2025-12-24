@@ -51,30 +51,34 @@ const initializeThemeVars = (theme) => {
 initializeThemeVars(swiishTheme);
 
 function registerServiceWorker() {
-  // Don't register in development, even if using production build
-  // This prevents caching issues during local development
-  const isDevelopment = window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1' ||
-                       window.location.hostname === '[::1]';
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  // In production builds, webpack replaces process.env.NODE_ENV with the string "production"
+  // In development mode (npm start), it's "development"
+  // This is the most reliable way to detect production builds
+  const isProductionBuild = process.env.NODE_ENV === 'production';
   
-  if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production' && !isDevelopment) {
+  if (isProductionBuild) {
+    // Register service worker in production builds (works on localhost and live servers)
     window.addEventListener('load', () => {
       const swUrl = `${process.env.PUBLIC_URL || ''}/service-worker.js`;
+      
       navigator.serviceWorker
         .register(swUrl)
         .catch((error) => {
           console.error('Service worker registration failed:', error);
         });
     });
-  } else if (isDevelopment) {
-    // Unregister any existing service workers in development
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((registration) => {
-          registration.unregister();
-        });
+  } else {
+    // Unregister any existing service workers in development mode
+    // This prevents caching issues during local development with npm start
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => {
+        registration.unregister();
       });
-    }
+    });
   }
 }
 

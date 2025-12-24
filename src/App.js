@@ -18,6 +18,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { arrayMove } from '@dnd-kit/sortable';
 
 const API_ENDPOINT = '/api';
+const APP_VERSION = '0.1.1'; // Update this to match package.json version
+const GITHUB_URL = 'https://github.com/MrCrin/swiish';
 const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
@@ -425,6 +427,73 @@ function Modal({ isOpen, onClose, type = 'info', title, message, onConfirm, conf
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VersionBadge() {
+  const [isOutdated, setIsOutdated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    // Check GitHub for latest version
+    const checkVersion = async () => {
+      try {
+        const response = await fetch('https://api.github.com/repos/MrCrin/swiish/releases/latest', {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const latestVersion = data.tag_name?.replace(/^v/, '') || data.tag_name; // Remove 'v' prefix if present
+          const currentVersion = APP_VERSION;
+          
+          // Simple version comparison (works for semantic versions like 0.1.0, 0.2.0, etc.)
+          const compareVersions = (v1, v2) => {
+            const parts1 = v1.split('.').map(Number);
+            const parts2 = v2.split('.').map(Number);
+            
+            for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+              const part1 = parts1[i] || 0;
+              const part2 = parts2[i] || 0;
+              if (part1 < part2) return -1;
+              if (part1 > part2) return 1;
+            }
+            return 0;
+          };
+          
+          if (latestVersion && compareVersions(currentVersion, latestVersion) < 0) {
+            setIsOutdated(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check version:', error);
+        // Silently fail - don't show error to user
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    checkVersion();
+  }, []);
+
+  return (
+    <div className="fixed bottom-4 left-4 z-50">
+      <a
+        href={GITHUB_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`text-xs font-medium transition-colors bg-card dark:bg-card-dark border border-border dark:border-border-dark px-2 py-1 rounded shadow-sm hover:shadow-md ${
+          isOutdated 
+            ? 'text-error-text dark:text-error-text-dark border-error-border dark:border-error-border hover:bg-error-bg dark:hover:bg-error-bg-dark' 
+            : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark'
+        }`}
+        title={isOutdated ? "Update available on GitHub" : "View on GitHub"}
+      >
+        v{APP_VERSION}
+      </a>
     </div>
   );
 }
@@ -1517,18 +1586,18 @@ const [settings, setSettings] = useState({
                <h1 className="text-2xl md:text-3xl font-bold text-text-primary dark:text-text-primary-dark">{settings?.default_organisation || 'People'}</h1>
                <p className="text-sm md:text-base text-text-muted dark:text-text-muted-dark">Manage your people</p>
              </div>
-             <div className="flex gap-3">
-               <button onClick={toggleDarkMode} className="px-4 py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2">
+             <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
+               <button onClick={toggleDarkMode} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                </button>
-               <button onClick={handleLogout} className="px-4 py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap">Logout</button>
+               <button onClick={handleLogout} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap text-sm md:text-base">Logout</button>
                {userRole === 'owner' && (
-                 <button onClick={() => navigate('/settings')} className="px-4 py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2">
-                   <Settings className="w-4 h-4" /> Organisation
+                 <button onClick={() => navigate('/settings')} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
+                   <Settings className="w-4 h-4" /> <span className="hidden sm:inline">Organisation</span><span className="sm:hidden">Org</span>
                  </button>
                )}
-               <button onClick={handleCreateNew} className="bg-action dark:bg-action-dark text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark transition-all whitespace-nowrap">
-                 <Plus className="w-5 h-5" /> New Person
+               <button onClick={handleCreateNew} className="bg-action dark:bg-action-dark text-white px-4 py-2 md:px-6 md:py-3 rounded-full font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark transition-all whitespace-nowrap text-sm md:text-base">
+                 <Plus className="w-4 h-4 md:w-5 md:h-5" /> New Person
                </button>
              </div>
           </div>
@@ -1843,6 +1912,7 @@ const [settings, setSettings] = useState({
           </div>
         </div>
       )}
+      <VersionBadge />
       </>
     );
   }
@@ -2037,6 +2107,7 @@ const [settings, setSettings] = useState({
               </div>
             </div>
           </div>
+          <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
         </>
       )}
@@ -2062,6 +2133,7 @@ const [settings, setSettings] = useState({
             </div>
             </div>
           </div>
+          <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
         </>
       )}
@@ -2075,23 +2147,23 @@ const [settings, setSettings] = useState({
                  <h1 className="text-2xl md:text-3xl font-bold text-text-primary dark:text-text-primary-dark">People</h1>
                  <p className="text-sm md:text-base text-text-muted dark:text-text-muted-dark">Manage your people</p>
                </div>
-               <div className="flex gap-3">
-                 <button onClick={toggleDarkMode} className="px-4 py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2">
+               <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
+                 <button onClick={toggleDarkMode} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
                    {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                  </button>
-                 <button onClick={handleLogout} className="px-4 py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap">Logout</button>
+                 <button onClick={handleLogout} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap text-sm md:text-base">Logout</button>
                  {userRole === 'owner' && (
-                   <button onClick={() => navigate('/settings')} className="px-4 py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2">
-                     <Settings className="w-4 h-4" /> Organisation
+                   <button onClick={() => navigate('/settings')} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
+                     <Settings className="w-4 h-4" /> <span className="hidden sm:inline">Organisation</span><span className="sm:hidden">Org</span>
                    </button>
                  )}
                  {userRole === 'owner' && (
-                   <button onClick={() => navigate('/users')} className="px-4 py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2">
+                   <button onClick={() => navigate('/users')} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
                      <Users className="w-4 h-4" /> Users
                    </button>
                  )}
-                 <button onClick={handleCreateNew} className="bg-action dark:bg-action-dark text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark transition-all whitespace-nowrap">
-                   <Plus className="w-5 h-5" /> New Person
+                 <button onClick={handleCreateNew} className="bg-action dark:bg-action-dark text-white px-4 py-2 md:px-6 md:py-3 rounded-full font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark transition-all whitespace-nowrap text-sm md:text-base">
+                   <Plus className="w-4 h-4 md:w-5 md:h-5" /> New Person
                  </button>
                </div>
             </div>
@@ -2392,6 +2464,7 @@ const [settings, setSettings] = useState({
               </div>
             </div>
           )}
+          <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
         </>
       )}
@@ -2449,6 +2522,7 @@ const [settings, setSettings] = useState({
             darkMode={darkMode}
             toggleDarkMode={toggleDarkMode}
           />
+          <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
         </>
       )}
@@ -2763,9 +2837,11 @@ function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
       }
     };
 
+    checkStandalone();
+
+    // Set up event listeners
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     window.addEventListener('appinstalled', handleAppInstalled);
-    checkStandalone();
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -3038,21 +3114,63 @@ END:VCARD`;
                   try {
                     await deferredPrompt.prompt();
                     const { outcome } = await deferredPrompt.userChoice;
-                    // If dismissed, keep the button visible; prompt may re-fire later
                     if (outcome === 'accepted') {
                       setIsPwaInstalled(true);
                     }
                   } catch (e) {
                     console.error('Install prompt failed:', e);
+                    if (typeof showAlert === 'function') {
+                      showAlert(
+                        'Install prompt failed. Please use your browser menu to install: Chrome/Edge (three dots menu > Install app), Firefox (menu > Install), or Safari (Share > Add to Home Screen).',
+                        'error',
+                        'Install Failed'
+                      );
+                    }
                   } finally {
                     setDeferredPrompt(null);
                   }
-                } else if (typeof showAlert === 'function') {
-                  showAlert(
-                    'To install this card, open your browser menu and choose \"Install app\" or \"Add to Home Screen\".',
-                    'info',
-                    'Install Swiish'
-                  );
+                } else {
+                  // Check if app is already installed
+                  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                                      window.navigator.standalone === true;
+                  
+                  if (isStandalone) {
+                    if (typeof showAlert === 'function') {
+                      showAlert(
+                        'This app is already installed on your device.',
+                        'info',
+                        'Already Installed'
+                      );
+                    }
+                    setIsPwaInstalled(true);
+                  } else {
+                    // Provide manual installation instructions
+                    const userAgent = navigator.userAgent.toLowerCase();
+                    let instructions = 'To install this app:\n\n';
+                    
+                    if (userAgent.includes('chrome') || userAgent.includes('edge')) {
+                      instructions += 'Chrome/Edge: Click the three dots menu (⋮) in the address bar, then select "Install app" or "Add to Home Screen".';
+                    } else if (userAgent.includes('firefox')) {
+                      instructions += 'Firefox: Click the menu button, then select "Install" or "Add to Home Screen".';
+                    } else if (userAgent.includes('safari')) {
+                      instructions += 'Safari (iOS): Tap the Share button, then "Add to Home Screen".';
+                    } else {
+                      instructions += 'Open your browser menu and look for "Install app" or "Add to Home Screen" option.';
+                    }
+                    
+                    instructions += '\n\nNote: The install button may not be available if the app doesn\'t meet PWA requirements (service worker, valid manifest, etc.).';
+                    
+                    if (typeof showAlert === 'function') {
+                      showAlert(
+                        instructions,
+                        'info',
+                        'Install Swiish'
+                      );
+                    } else {
+                      // Fallback if showAlert is not available
+                      alert(instructions);
+                    }
+                  }
                 }
               }}
               className="bg-white/30 dark:bg-black/30 backdrop-blur-md p-2.5 rounded-full text-white hover:bg-white/40 dark:hover:bg-black/40 transition-all border border-white/20 dark:border-white/10 shadow-sm"
@@ -5061,8 +5179,8 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
         </div>
       </div>
 
-      <div className="hidden lg:flex w-1/2 bg-surface dark:bg-main-dark bg-main-texture items-center justify-center p-10">
-        <div className="bg-card dark:bg-card-dark rounded-card p-8 shadow-lg max-w-md w-full border border-border dark:border-border-dark">
+      <div className="hidden lg:flex w-1/2 bg-main dark:bg-main-dark bg-main-texture items-center justify-center p-10">
+        <div className="bg-card dark:bg-card-dark rounded-card p-8 shadow-lg max-w-md w-full border border-border dark:border-border-dark relative z-10 isolate">
           <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">Preview</h3>
           <div className="space-y-4">
             <div>

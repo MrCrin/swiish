@@ -16,20 +16,6 @@
           if (manifestLink) {
             const newHref = '/manifest/' + slug + '.json';
             manifestLink.setAttribute('href', newHref);
-            // Only log in development (localhost)
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-              console.log('[PWA Debug] Updated manifest link to:', newHref, 'for slug:', slug);
-            }
-          } else {
-            // Only log in development (localhost)
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-              console.warn('[PWA Debug] Manifest link not found in DOM');
-            }
-          }
-        } else {
-          // Only log in development (localhost)
-          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            console.log('[PWA Debug] No slug found or admin page, keeping default manifest');
           }
         }
       })();

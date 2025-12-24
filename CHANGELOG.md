@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-12-24
+
+### Fixed
+- Service worker registration logic improved for better production build detection
+- Icon generation now uses correct organization's theme colors instead of default organization
+- SVG icon path updated to match actual Swiish_Logo_Device.svg file dimensions
+- Horizontal scroll overflow issue fixed with CSS updates
+
+### Changed
+- PWA manifest icons updated to use SVG files from `/graphics/` directory
+- Manifest and icon endpoints now support short codes (case-sensitive lookup)
+- Improved responsive design for admin dashboard buttons (mobile-friendly sizing)
+- Enhanced PWA install functionality with better error handling and browser-specific instructions
+
+### Added
+- Version badge component that displays current version and checks GitHub for updates
+- Better error messages for PWA installation failures
+- Manual installation instructions for different browsers when auto-install isn't available
+
+### Removed
+- Debug console.log statements from PWA manifest loading code
+
 ## [0.1.0] - 2025-12-20
 
 ### Added

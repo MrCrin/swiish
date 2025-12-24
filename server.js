@@ -891,6 +891,14 @@ const slugValidation = param('slug')
   .isLength({ min: 1, max: 50 })
   .withMessage('Slug must be between 1 and 50 characters');
 
+// More permissive validation for manifest/icon endpoints (allows uppercase for short codes)
+const identifierValidation = param('slug')
+  .trim()
+  .matches(/^[a-zA-Z0-9-]+$/)
+  .withMessage('Identifier must contain only letters, numbers, and hyphens')
+  .isLength({ min: 1, max: 50 })
+  .withMessage('Identifier must be between 1 and 50 characters');
+
 // Short code generation functions
 const crypto = require('crypto');
 
@@ -2620,9 +2628,14 @@ app.get('/api/auth/verify-email/:token', [
 
 // Dynamic per-card manifest endpoint
 app.get('/manifest/:slug.json', [
-  slugValidation
+  identifierValidation
 ], handleValidationErrors, async (req, res, next) => {
-  const slug = req.params.slug.toLowerCase();
+  // Get original identifier (before lowercasing) to preserve short code case
+  const originalIdentifier = req.params.slug;
+  // Check if it's a short code (exactly 7 alphanumeric chars) - case sensitive
+  const isShortCode = /^[a-zA-Z0-9]{7}$/.test(originalIdentifier);
+  // Use original for short codes, lowercase for slugs
+  const identifier = isShortCode ? originalIdentifier : originalIdentifier.toLowerCase();
   
 
   // Load base manifest from disk (fallback if needed)
@@ -2660,9 +2673,21 @@ app.get('/manifest/:slug.json', [
     console.error('Failed to read base manifest:', err);
   }
 
-  db.get("SELECT data FROM cards WHERE slug = ?", [slug], (err, row) => {
+  // Look up card by short_code or slug - need both data and slug for icon generation
+  const query = isShortCode 
+    ? "SELECT data, slug FROM cards WHERE short_code = ?"
+    : "SELECT data, slug FROM cards WHERE slug = ?";
+    
+  db.get(query, [identifier], (err, row) => {
     if (err) return next(err);
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
 
+    // Use the actual card slug for icon generation (not the short code or org slug)
+    const cardSlug = row.slug;
+    
     let cardName = 'Swiish Card';
     if (row && row.data) {
       try {
@@ -2676,7 +2701,8 @@ app.get('/manifest/:slug.json', [
       }
     }
 
-    const startUrl = `/${slug}/`;
+    // Use the identifier from URL for start_url (preserves short code or org-scoped routes)
+    const startUrl = `/${identifier}/`;
     const manifest = {
       ...baseManifest,
       name: cardName,
@@ -2684,12 +2710,11 @@ app.get('/manifest/:slug.json', [
       start_url: startUrl,
       scope: startUrl,
       icons: [
-        { src: `/icons/${slug}.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-        { src: `/icons/${slug}.svg`, sizes: '192x192', type: 'image/svg+xml' },
-        { src: `/icons/${slug}.svg`, sizes: '512x512', type: 'image/svg+xml' }
+        { src: `/icons/${cardSlug}.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        { src: `/icons/${cardSlug}.svg`, sizes: '192x192', type: 'image/svg+xml' },
+        { src: `/icons/${cardSlug}.svg`, sizes: '512x512', type: 'image/svg+xml' }
       ]
     };
-
 
     res.json(manifest);
   });
@@ -2697,38 +2722,61 @@ app.get('/manifest/:slug.json', [
 
 // Dynamic themed SVG icon endpoint
 app.get('/icons/:slug.svg', [
-  slugValidation
+  identifierValidation
 ], handleValidationErrors, (req, res, next) => {
   const slug = req.params.slug.toLowerCase();
 
-
-  db.get("SELECT data FROM cards WHERE slug = ?", [slug], (err, row) => {
+  // Get card data AND the user's organization_id in one query
+  db.get(`
+    SELECT c.data, u.organisation_id
+    FROM cards c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.slug = ?
+  `, [slug], (err, row) => {
     if (err) return next(err);
 
+    if (!row) {
+      return res.status(404).type('image/svg+xml').send(`<svg xmlns="http://www.w3.org/2000/svg"><text>Card not found</text></svg>`);
+    }
 
     let themeColor = 'indigo';
-    if (row && row.data) {
+    if (row.data) {
       try {
         const parsed = JSON.parse(row.data);
         themeColor = parsed.theme?.color || 'indigo';
       } catch (e) {
+        // fallback to indigo
       }
-    } else {
     }
 
-    // Query settings for theme_colors to get custom hex values (from default organization)
+    // Query settings for theme_colors from the card's ACTUAL organization
+    const orgId = row.organisation_id;
+    
+    // Handle case where organisation_id might be null
+    if (!orgId) {
+      const fillColor = getThemeColorHex(themeColor);
+      const svgPath = "M356.35,66.77h-59.65v-27.16c0-21.79-17.83-39.62-39.62-39.62H6.6C2.96,0,0,2.96,0,6.6v130.94c0,21.79,17.83,39.62,39.62,39.62h35.71c3.08,0,5.57-2.49,5.57-5.57v-78.41c0-14.59,11.82-26.41,26.41-26.41h16.52c3.65,0,6.6,2.96,6.6,6.6v8.49c0,3.65-2.96,6.6-6.6,6.6h-9.13c-3.65,0-6.6,2.96-6.6,6.6v76.53c0,3.08,2.49,5.57,5.57,5.57h143.42c21.79,0,39.62-17.83,39.62-39.62v-44.37h59.65c7.26,0,13.21,5.94,13.21,13.21v127.63c0,7.26-5.94,13.21-13.21,13.21H121.01c-7.26,0-13.21-5.94-13.21-13.21v-6.83c0-3.65-2.96-6.6-6.6-6.6h-13.21c-3.65,0-6.6,2.96-6.6,6.6v6.83c0,21.79,17.83,39.62,39.62,39.62h235.34c21.79,0,39.62-17.83,39.62-39.62v-127.63c0-21.79-17.83-39.62-39.62-39.62Z";
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 395.96 273.63">
+  <g id="Layer_1-2" data-name="Layer 1">
+    <path fill="${fillColor}" d="${svgPath}"/>
+  </g>
+</svg>`;
+      return res.type('image/svg+xml').send(svg);
+    }
+    
     db.get(`
       SELECT os.value 
       FROM organisation_settings os
-      JOIN organisations o ON os.organisation_id = o.id
-      WHERE o.slug = 'default' AND os.key = ?
-    `, ['theme_colors'], (settingsErr, settingsRow) => {
+      WHERE os.organisation_id = ? AND os.key = ?
+    `, [orgId, 'theme_colors'], (settingsErr, settingsRow) => {
       let fillColor = '#4f46e5'; // default to indigo
       
       if (!settingsErr && settingsRow && settingsRow.value) {
         try {
           const theme_colors = JSON.parse(settingsRow.value);
           const colorEntry = theme_colors.find(c => c.name === themeColor);
+          
           if (colorEntry) {
             // Use textStyle (hex value) or hexBase, fall back to colorMap
             fillColor = colorEntry.textStyle || colorEntry.hexBase || getThemeColorHex(themeColor);
@@ -2746,16 +2794,16 @@ app.get('/icons/:slug.svg', [
       }
 
 
-      // SVG path from Swiish_Logo_Device.svg
-      const svgPath = "M104.91,26.83h-15.04v-14.83c0-6.6-5.4-12-12-12H0v41.66c0,6.6,5.4,12,12,12h12.5v-26.83h15v6.57h-6.77v20.26h45.13c6.6,0,12-5.4,12-12v-6.83h15.04c2.17,0,4,1.83,4,4v32.05c0,2.17-1.83,4-4,4H36.66c-2.17,0-4-1.83-4-4v-2.24h-8v2.24c0,6.6,5.4,12,12,12h68.26c6.6,0,12-5.4,12-12v-32.05c0-6.6-5.4-12-12-12Z";
+      // SVG path from Swiish_Logo_Device.svg (extracted from the actual file)
+      // viewBox: 0 0 395.96 273.63
+      const svgPath = "M356.35,66.77h-59.65v-27.16c0-21.79-17.83-39.62-39.62-39.62H6.6C2.96,0,0,2.96,0,6.6v130.94c0,21.79,17.83,39.62,39.62,39.62h35.71c3.08,0,5.57-2.49,5.57-5.57v-78.41c0-14.59,11.82-26.41,26.41-26.41h16.52c3.65,0,6.6,2.96,6.6,6.6v8.49c0,3.65-2.96,6.6-6.6,6.6h-9.13c-3.65,0-6.6,2.96-6.6,6.6v76.53c0,3.08,2.49,5.57,5.57,5.57h143.42c21.79,0,39.62-17.83,39.62-39.62v-44.37h59.65c7.26,0,13.21,5.94,13.21,13.21v127.63c0,7.26-5.94,13.21-13.21,13.21H121.01c-7.26,0-13.21-5.94-13.21-13.21v-6.83c0-3.65-2.96-6.6-6.6-6.6h-13.21c-3.65,0-6.6,2.96-6.6,6.6v6.83c0,21.79,17.83,39.62,39.62,39.62h235.34c21.79,0,39.62-17.83,39.62-39.62v-127.63c0-21.79-17.83-39.62-39.62-39.62Z";
 
       const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116.91 82.89">
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 395.96 273.63">
   <g id="Layer_1-2" data-name="Layer 1">
     <path fill="${fillColor}" d="${svgPath}"/>
   </g>
 </svg>`;
-
 
       res.type('image/svg+xml').send(svg);
     });
