@@ -3053,64 +3053,41 @@ END:VCARD`;
 
   const currentQrDataUrl = qrMode === 'simple' ? qrSimpleDataUrl : qrRichDataUrl;
 
+  // Extract short code for display
+  const pathParts = typeof window !== 'undefined' ? window.location.pathname.substring(1).split('/').filter(p => p) : [];
+  const isShortCodeRoute = pathParts.length === 1 && /^[a-zA-Z0-9]{7}$/.test(pathParts[0]);
+  const shortCode = data._shortCode || (isShortCodeRoute ? pathParts[0] : null);
+  const shortUrl = shortCode ? `${window.location.origin}/${shortCode}` : '';
+  const cardName = `${personal.firstName || ''} ${personal.lastName || ''}`.trim();
+  const company = personal.company || '';
+
   return (
     <div className={`flex flex-col h-full bg-card dark:bg-card-dark`}>
       {showQR && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowQR(false)}>
-          <div className="bg-card dark:bg-card-dark rounded-card p-6 max-w-[320px] w-full text-center space-y-4" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-text-primary dark:text-text-primary-dark mb-1">Share Card</h2>
-            
-            {/* Shared width wrapper for toggle + QR + button */}
-            <div className="w-full max-w-[260px] mx-auto space-y-3">
-              {/* Toggle - full width */}
-              <div className="w-full">
-                <div className="flex w-full items-center justify-center gap-1 bg-surface dark:bg-surface-dark rounded-full p-1 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setQrMode('simple')}
-                    className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
-                      qrMode === 'simple'
-                        ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
-                        : 'text-text-muted dark:text-text-secondary-dark'
-                    }`}
-                  >
-                    Link only
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQrMode('rich')}
-                    className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
-                      qrMode === 'rich'
-                        ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
-                        : 'text-text-muted dark:text-text-secondary-dark'
-                    }`}
-                  >
-                    Full details
-                  </button>
-                </div>
-              </div>
-
-              {/* QR container - full width */}
-              <div className="w-full">
-                <div className="w-full bg-input-bg dark:bg-input-bg-dark p-3 rounded-input border-thick border-border-subtle dark:border-border-dark flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 z-50 flex flex-col" onClick={() => setShowQR(false)}>
+          <div className="bg-card dark:bg-card-dark h-full flex flex-col text-center overflow-hidden lg:rounded-[22px]" onClick={e => e.stopPropagation()}>
+            {/* QR Code section at top */}
+            <div className="flex-1 flex flex-col items-center justify-start pt-8 px-4">
+              <div className="w-[90%]">
+                <div className="w-full bg-input-bg dark:bg-input-bg-dark p-3 rounded-input border-thick border-border-subtle dark:border-border-dark flex items-center justify-center overflow-hidden">
                   {currentQrDataUrl ? (
-                    <img src={currentQrDataUrl} className="w-40 h-40 max-w-full max-h-full mix-blend-multiply dark:mix-blend-normal" alt="qr" />
+                    <img src={currentQrDataUrl} className="w-full aspect-square mix-blend-multiply dark:mix-blend-normal" alt="QR code" />
                   ) : qrMode === 'rich' && offlineQrPayload ? (
-                    <div className="w-40 h-40 flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs space-y-1">
+                    <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs space-y-1">
                       <span>{isOnline ? 'Saved details' : 'Offline mode'}</span>
                       <span className="text-[10px] opacity-80 px-1">
                         This code includes your saved Swiish details and a link to your card when scanned with an online device.
                       </span>
                     </div>
                   ) : (!isOnline && qrMode === 'simple' && !qrSimpleDataUrl) ? (
-                    <div className="w-40 h-40 flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs text-center space-y-1">
+                    <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs text-center space-y-1">
                       <span>Link-only QR is available when you&apos;re online.</span>
                       <span className="text-[10px] opacity-80 px-1">
                         Switch to \"Full details\" to use your saved offline code.
                       </span>
                     </div>
                   ) : (
-                    <div className="w-40 h-40 flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark text-xs text-center">
+                    <div className="w-full aspect-square flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark text-xs text-center">
                       {isOnline
                         ? (qrError || 'Loading your QR code...')
                         : 'Connect once to generate and save your QR code for offline use.'}
@@ -3119,15 +3096,57 @@ END:VCARD`;
                 </div>
               </div>
 
+              {/* Card information display */}
+              <div className="mt-6 space-y-2 px-4">
+                {cardName && (
+                  <h2 className="text-xl font-bold text-text-primary dark:text-text-primary-dark">{cardName}</h2>
+                )}
+                {company && (
+                  <div className="text-text-muted dark:text-text-muted-dark text-sm">{company}</div>
+                )}
+                {shortUrl && (
+                  <div className="text-text-muted-subtle dark:text-text-secondary-dark text-xs font-mono break-all">{shortUrl}</div>
+                )}
+              </div>
+
               {/* Offline note */}
               {!isOnline && offlineQrPayload && (
-                <p className="text-xs text-text-muted dark:text-text-muted-dark">
+                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-4 px-4">
                   Using last saved QR details (offline). The code includes your contact info and a link to your Swiish card.
                 </p>
               )}
+            </div>
 
-              {/* Close button - full width */}
-              <button onClick={() => setShowQR(false)} className="w-full py-3 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-bold rounded-input hover:bg-surface dark:hover:bg-surface-dark text-sm transition-colors">Close</button>
+            {/* Controls section at bottom */}
+            <div className="pb-12 px-4 space-y-3">
+              {/* Toggle buttons */}
+              <div className="flex w-full items-center justify-center gap-1 bg-surface dark:bg-surface-dark rounded-full p-1 text-[11px] max-w-md mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setQrMode('simple')}
+                  className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
+                    qrMode === 'simple'
+                      ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
+                      : 'text-text-muted dark:text-text-secondary-dark'
+                  }`}
+                >
+                  Link only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrMode('rich')}
+                  className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
+                    qrMode === 'rich'
+                      ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
+                      : 'text-text-muted dark:text-text-secondary-dark'
+                  }`}
+                >
+                  Full details
+                </button>
+              </div>
+
+              {/* Close button */}
+              <button onClick={() => setShowQR(false)} className="w-full max-w-md mx-auto py-3 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-bold rounded-input hover:bg-surface dark:hover:bg-surface-dark text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
