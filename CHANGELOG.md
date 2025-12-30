@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Version badge now shows blue border when code is ahead of latest GitHub release (instead of red)
+- Version comparison now follows SemVer precedence rules, properly handling pre-release versions (e.g., `0.2.2-dev` vs `0.2.1`)
 - QR code share modal redesigned to full-screen overlay for better visibility
 - QR code now displays at 90% width at the top of the screen (previously constrained to small modal)
 - Share controls (Link only/Full details toggle and Close button) moved to bottom of screen

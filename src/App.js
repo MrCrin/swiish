@@ -403,6 +403,7 @@ function Modal({ isOpen, onClose, type = 'info', title, message, onConfirm, conf
 
 function VersionBadge() {
   const [isOutdated, setIsOutdated] = useState(false);
+  const [isAhead, setIsAhead] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
@@ -420,22 +421,86 @@ function VersionBadge() {
           const latestVersion = data.tag_name?.replace(/^v/, '') || data.tag_name; // Remove 'v' prefix if present
           const currentVersion = APP_VERSION;
           
-          // Simple version comparison (works for semantic versions like 0.1.0, 0.2.0, etc.)
+          // SemVer-compliant version comparison
+          // Follows SemVer precedence rules: pre-release versions have lower precedence than stable versions
           const compareVersions = (v1, v2) => {
-            const parts1 = v1.split('.').map(Number);
-            const parts2 = v2.split('.').map(Number);
-            
-            for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-              const part1 = parts1[i] || 0;
-              const part2 = parts2[i] || 0;
+            // Parse versions into base version and pre-release identifier
+            const parseVersion = (version) => {
+              const dashIndex = version.indexOf('-');
+              if (dashIndex === -1) {
+                return {
+                  base: version,
+                  prerelease: null
+                };
+              }
+              return {
+                base: version.substring(0, dashIndex),
+                prerelease: version.substring(dashIndex + 1)
+              };
+            };
+
+            const parsed1 = parseVersion(v1);
+            const parsed2 = parseVersion(v2);
+
+            // Compare base versions numerically
+            const base1 = parsed1.base.split('.').map(Number);
+            const base2 = parsed2.base.split('.').map(Number);
+
+            for (let i = 0; i < Math.max(base1.length, base2.length); i++) {
+              const part1 = base1[i] || 0;
+              const part2 = base2[i] || 0;
               if (part1 < part2) return -1;
               if (part1 > part2) return 1;
             }
-            return 0;
+
+            // Base versions are equal, now check pre-release identifiers
+            // Rule: A version without a pre-release identifier has higher precedence
+            if (parsed1.prerelease === null && parsed2.prerelease === null) {
+              return 0; // Both are stable, equal
+            }
+            if (parsed1.prerelease === null) {
+              return 1; // v1 is stable, v2 is pre-release, v1 > v2
+            }
+            if (parsed2.prerelease === null) {
+              return -1; // v1 is pre-release, v2 is stable, v1 < v2
+            }
+
+            // Both have pre-release identifiers, compare lexicographically
+            const prerelease1 = parsed1.prerelease.split('.');
+            const prerelease2 = parsed2.prerelease.split('.');
+
+            for (let i = 0; i < Math.max(prerelease1.length, prerelease2.length); i++) {
+              const part1 = prerelease1[i];
+              const part2 = prerelease2[i];
+
+              if (part1 === undefined) return -1; // v1 has fewer parts, v1 < v2
+              if (part2 === undefined) return 1; // v2 has fewer parts, v1 > v2
+
+              // Try numeric comparison first, fall back to string comparison
+              const num1 = Number(part1);
+              const num2 = Number(part2);
+
+              if (!isNaN(num1) && !isNaN(num2)) {
+                // Both are numeric
+                if (num1 < num2) return -1;
+                if (num1 > num2) return 1;
+              } else {
+                // At least one is non-numeric, compare as strings
+                if (part1 < part2) return -1;
+                if (part1 > part2) return 1;
+              }
+            }
+
+            return 0; // Pre-release identifiers are equal
           };
           
-          if (latestVersion && compareVersions(currentVersion, latestVersion) < 0) {
-            setIsOutdated(true);
+          if (latestVersion) {
+            const comparison = compareVersions(currentVersion, latestVersion);
+            if (comparison < 0) {
+              setIsOutdated(true);
+            } else if (comparison > 0) {
+              setIsAhead(true);
+            }
           }
         }
       } catch (error) {
@@ -458,9 +523,11 @@ function VersionBadge() {
         className={`text-xs font-medium transition-all bg-card dark:bg-card-dark border-2 border-border dark:border-border-dark px-2 py-1 rounded shadow-sm hover:shadow-md ${
           isOutdated 
             ? 'text-error-text dark:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark hover:border-error-border dark:hover:border-error-border-dark' 
+            : isAhead
+            ? 'text-info-text dark:text-info-text-dark hover:bg-info-bg dark:hover:bg-info-bg-dark hover:border-info-border dark:hover:border-info-border-dark'
             : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark hover:border-success-border dark:hover:border-success-border-dark'
         }`}
-        title={isOutdated ? "Update available on GitHub" : "View on GitHub"}
+        title={isOutdated ? "Update available on GitHub" : isAhead ? "Ahead of latest release on GitHub" : "View on GitHub"}
       >
         v{APP_VERSION}
       </a>
