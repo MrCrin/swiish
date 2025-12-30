@@ -2740,12 +2740,6 @@ function PublicCardRoute({ view, isPublicLoading, error, data, settings, darkMod
             showAlert={showAlert}
           />
         </div>
-        <div className="bg-card dark:bg-card-dark pb-4 text-center space-y-2 mt-auto relative z-10">
-            <div className="flex justify-center">
-              <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
-              <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
-            </div>
-        </div>
       </div>
       </div>
     );
@@ -3061,98 +3055,108 @@ END:VCARD`;
   const cardName = `${personal.firstName || ''} ${personal.lastName || ''}`.trim();
   const company = personal.company || '';
 
-  return (
-    <div className={`flex flex-col h-full bg-card dark:bg-card-dark`}>
-      {showQR && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 z-50 flex flex-col" onClick={() => setShowQR(false)}>
-          <div className="bg-card dark:bg-card-dark h-full flex flex-col text-center overflow-hidden lg:rounded-[22px]" onClick={e => e.stopPropagation()}>
-            {/* QR Code section at top */}
-            <div className="flex-1 flex flex-col items-center justify-start pt-8 px-4">
-              <div className="w-[90%]">
-                <div className="w-full bg-input-bg dark:bg-input-bg-dark p-3 rounded-input border-thick border-border-subtle dark:border-border-dark flex items-center justify-center overflow-hidden">
-                  {currentQrDataUrl ? (
-                    <img src={currentQrDataUrl} className="w-full aspect-square mix-blend-multiply dark:mix-blend-normal" alt="QR code" />
-                  ) : qrMode === 'rich' && offlineQrPayload ? (
-                    <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs space-y-1">
-                      <span>{isOnline ? 'Saved details' : 'Offline mode'}</span>
-                      <span className="text-[10px] opacity-80 px-1">
-                        This code includes your saved Swiish details and a link to your card when scanned with an online device.
-                      </span>
-                    </div>
-                  ) : (!isOnline && qrMode === 'simple' && !qrSimpleDataUrl) ? (
-                    <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs text-center space-y-1">
-                      <span>Link-only QR is available when you&apos;re online.</span>
-                      <span className="text-[10px] opacity-80 px-1">
-                        Switch to \"Full details\" to use your saved offline code.
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-square flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark text-xs text-center">
-                      {isOnline
-                        ? (qrError || 'Loading your QR code...')
-                        : 'Connect once to generate and save your QR code for offline use.'}
-                    </div>
-                  )}
+  // If QR is shown, render only the QR view (full screen, independent of card)
+  if (showQR) {
+    return (
+      <div className="fixed inset-0 bg-card dark:bg-card-dark flex flex-col text-center overflow-hidden lg:rounded-[22px] z-50 min-h-screen lg:min-h-0 lg:h-auto">
+        {/* QR Code section at top */}
+        <div className="flex flex-col items-center justify-start pt-8 px-4 pb-8 lg:pt-8 lg:flex-shrink-0">
+          <div className="w-[90%]">
+            <div className="w-full bg-input-bg dark:bg-input-bg-dark p-3 rounded-input border-thick border-border-subtle dark:border-border-dark flex items-center justify-center overflow-hidden">
+              {currentQrDataUrl ? (
+                <img src={currentQrDataUrl} className="w-full aspect-square mix-blend-multiply dark:mix-blend-normal" alt="QR code" />
+              ) : qrMode === 'rich' && offlineQrPayload ? (
+                <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs space-y-1">
+                  <span>{isOnline ? 'Saved details' : 'Offline mode'}</span>
+                  <span className="text-[10px] opacity-80 px-1">
+                    This code includes your saved Swiish details and a link to your card when scanned with an online device.
+                  </span>
                 </div>
-              </div>
-
-              {/* Card information display */}
-              <div className="mt-6 space-y-2 px-4">
-                {cardName && (
-                  <h2 className="text-xl font-bold text-text-primary dark:text-text-primary-dark">{cardName}</h2>
-                )}
-                {company && (
-                  <div className="text-text-muted dark:text-text-muted-dark text-sm">{company}</div>
-                )}
-                {shortUrl && (
-                  <div className="text-text-muted-subtle dark:text-text-secondary-dark text-xs font-mono break-all">{shortUrl}</div>
-                )}
-              </div>
-
-              {/* Offline note */}
-              {!isOnline && offlineQrPayload && (
-                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-4 px-4">
-                  Using last saved QR details (offline). The code includes your contact info and a link to your Swiish card.
-                </p>
+              ) : (!isOnline && qrMode === 'simple' && !qrSimpleDataUrl) ? (
+                <div className="w-full aspect-square flex flex-col items-center justify-center text-text-muted-subtle dark:text-text-secondary-dark text-xs text-center space-y-1">
+                  <span>Link-only QR is available when you&apos;re online.</span>
+                  <span className="text-[10px] opacity-80 px-1">
+                    Switch to \"Full details\" to use your saved offline code.
+                  </span>
+                </div>
+              ) : (
+                <div className="w-full aspect-square flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark text-xs text-center">
+                  {isOnline
+                    ? (qrError || 'Loading your QR code...')
+                    : 'Connect once to generate and save your QR code for offline use.'}
+                </div>
               )}
             </div>
+          </div>
 
-            {/* Controls section at bottom */}
-            <div className="pb-12 px-4 space-y-3">
-              {/* Toggle buttons */}
-              <div className="flex w-full items-center justify-center gap-1 bg-surface dark:bg-surface-dark rounded-full p-1 text-[11px] max-w-md mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setQrMode('simple')}
-                  className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
-                    qrMode === 'simple'
-                      ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
-                      : 'text-text-muted dark:text-text-secondary-dark'
-                  }`}
-                >
-                  Link only
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQrMode('rich')}
-                  className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
-                    qrMode === 'rich'
-                      ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
-                      : 'text-text-muted dark:text-text-secondary-dark'
-                  }`}
-                >
-                  Full details
-                </button>
-              </div>
+          {/* Card information display */}
+          <div className="mt-6 space-y-2 px-4">
+            {cardName && (
+              <h2 className="text-xl font-bold text-text-primary dark:text-text-primary-dark">{cardName}</h2>
+            )}
+            {company && (
+              <div className="text-text-muted dark:text-text-muted-dark text-sm">{company}</div>
+            )}
+            {shortUrl && (
+              <div className="text-text-muted-subtle dark:text-text-secondary-dark text-xs font-mono break-all">{shortUrl}</div>
+            )}
+          </div>
 
-              {/* Close button */}
-              <button onClick={() => setShowQR(false)} className="w-full max-w-md mx-auto py-3 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-bold rounded-input hover:bg-surface dark:hover:bg-surface-dark text-sm transition-colors">Close</button>
+          {/* Offline note */}
+          {!isOnline && offlineQrPayload && (
+            <p className="text-xs text-text-muted dark:text-text-muted-dark mt-4 px-4">
+              Using last saved QR details (offline). The code includes your contact info and a link to your Swiish card.
+            </p>
+          )}
+        </div>
+
+        {/* Controls and logo section at bottom */}
+        <div className="mt-auto pb-4 px-4 space-y-3 lg:pb-4 lg:pt-4 lg:flex-shrink-0">
+          {/* Toggle buttons */}
+          <div className="flex w-full items-center justify-center gap-1 bg-surface dark:bg-surface-dark rounded-full p-1 text-[11px] max-w-md mx-auto">
+            <button
+              type="button"
+              onClick={() => setQrMode('simple')}
+              className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
+                qrMode === 'simple'
+                  ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
+                  : 'text-text-muted dark:text-text-secondary-dark'
+              }`}
+            >
+              Link only
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrMode('rich')}
+              className={`flex-1 px-2.5 py-1 rounded-full font-medium transition-colors ${
+                qrMode === 'rich'
+                  ? 'bg-card dark:bg-main-dark text-text-primary dark:text-text-primary-dark shadow-sm'
+                  : 'text-text-muted dark:text-text-secondary-dark'
+              }`}
+            >
+              Full details
+            </button>
+          </div>
+
+          {/* Close button */}
+          <button onClick={() => setShowQR(false)} className="w-full max-w-md mx-auto py-3 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark font-bold rounded-input hover:bg-surface dark:hover:bg-surface-dark text-sm transition-colors">Close</button>
+
+          {/* Swiish logo */}
+          <div className="bg-card dark:bg-card-dark text-center space-y-2 mt-[24px] mb-[12px]">
+            <div className="flex justify-center">
+              <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
+              <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
             </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      <div className={`h-44 w-full relative bg-surface dark:bg-surface-dark ${showQR ? 'opacity-0' : 'opacity-100'}`}>
+  // Otherwise, render the normal card view
+  return (
+    <div className={`flex flex-col h-full bg-card dark:bg-card-dark`}>
+      <div className="h-44 w-full relative bg-surface dark:bg-surface-dark">
         {images.banner ? (
           <img src={images.banner} className="w-full h-full object-cover" alt="banner" />
         ) : (
@@ -3249,7 +3253,7 @@ END:VCARD`;
         </div>
       </div>
 
-      <div className="px-6 pb-12 -mt-16 relative flex-1 flex flex-col">
+      <div className="px-6 pb-6 -mt-16 relative flex-1 flex flex-col min-h-0">
         <div className="w-32 h-32 rounded-full border-avatar border-white dark:border-card-dark shadow-xl overflow-hidden bg-card dark:bg-card-dark relative mb-4">
           {images.avatar ? <img src={images.avatar} className="w-full h-full object-cover" alt="avatar" /> : <div className="w-full h-full bg-surface dark:bg-surface-dark flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark"><User className="w-12 h-12" /></div>}
         </div>
@@ -3503,6 +3507,14 @@ END:VCARD`;
            <SocialIcon url={social.twitter} icon={Twitter} label="X" themeColor={themeColor} />
            <SocialIcon url={social.instagram} icon={Instagram} label="Insta" themeColor={themeColor} />
            <SocialIcon url={social.github} icon={Github} label="Git" themeColor={themeColor} />
+        </div>
+
+        {/* Swiish logo */}
+        <div className="bg-card dark:bg-card-dark pb-4 text-center space-y-2 mt-auto lg:pb-4">
+          <div className="flex justify-center">
+            <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
+            <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
+          </div>
         </div>
       </div>
     </div>
