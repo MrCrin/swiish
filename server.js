@@ -127,6 +127,23 @@ const UPLOADS_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+// Path validation helper to prevent path traversal attacks
+function validateFilePath(filePath) {
+  if (!filePath) {
+    throw new Error('File path is required');
+  }
+  // Resolve to absolute path
+  const resolvedPath = path.resolve(filePath);
+  const resolvedUploadsDir = path.resolve(UPLOADS_DIR);
+  
+  // Ensure the file is within uploads directory
+  if (!resolvedPath.startsWith(resolvedUploadsDir)) {
+    throw new Error('Invalid file path: path traversal detected');
+  }
+  
+  return resolvedPath;
+}
+
 // --- 2. SETUP DATABASE (SQLite) ---
 const db = new sqlite3.Database(path.join(DATA_DIR, 'cards.db'));
 
@@ -355,6 +372,23 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Additional rate limiters for different endpoint types
+const publicReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // More lenient for public read operations
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const cardReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Moderate limit for card reads
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // CSRF protection (skip for GET requests and public endpoints)
 const csrfProtection = csrf({ 
   cookie: {
@@ -520,10 +554,13 @@ app.post('/api/setup/initialize', apiLimiter, csrfProtection, [
     const { organisationName, adminEmail, adminPassword } = req.body;
     
     // Generate organisation slug from name
+    // Fix ReDoS: use separate replace calls instead of alternation in single regex
     const orgSlug = organisationName.toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'organisation';
+      .replace(/^-+/, '')  // Remove leading dashes (no alternation)
+      .replace(/-+$/, '')  // Remove trailing dashes (no alternation)
+      || 'organisation';
     
     // Find available slug (shouldn't be needed on fresh install, but be safe)
     const findAvailableSlug = (slug, counter = 0) => {
@@ -775,7 +812,8 @@ app.post('/api/upload', requireAuth, uploadLimiter, csrfProtection, upload.singl
     if (!fileType || !ALLOWED_MIME_TYPES.includes(fileType.mime)) {
       // Delete the uploaded file if it's not valid
       try {
-        await fs.promises.unlink(filePath);
+        const safePath = validateFilePath(filePath);
+        await fs.promises.unlink(safePath);
       } catch (unlinkErr) {
         // Log but don't fail the request if cleanup fails
         log('Failed to delete invalid file:', unlinkErr.message);
@@ -794,7 +832,8 @@ app.post('/api/upload', requireAuth, uploadLimiter, csrfProtection, upload.singl
     
     if (expectedExt[fileType.mime] !== ext) {
       try {
-        await fs.promises.unlink(filePath);
+        const safePath = validateFilePath(filePath);
+        await fs.promises.unlink(safePath);
       } catch (unlinkErr) {
         // Log but don't fail the request if cleanup fails
         log('Failed to delete invalid file:', unlinkErr.message);
@@ -808,7 +847,8 @@ app.post('/api/upload', requireAuth, uploadLimiter, csrfProtection, upload.singl
     // Clean up file if error occurred
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       try {
-        await fs.promises.unlink(req.file.path);
+        const safePath = validateFilePath(req.file.path);
+        await fs.promises.unlink(safePath);
       } catch (unlinkErr) {
         // Log but don't fail the request if cleanup fails
         log('Failed to delete file on error:', unlinkErr.message);
@@ -860,9 +900,16 @@ const crypto = require('crypto');
 
 function generateShortCode() {
   let code = '';
-  const bytes = crypto.randomBytes(SHORT_CODE_LENGTH);
+  const charsLength = SHORT_CODE_CHARS.length;
+  const maxValid = Math.floor(256 / charsLength) * charsLength; // 248 for 62 chars
+  
   for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
-    code += SHORT_CODE_CHARS[bytes[i] % SHORT_CODE_CHARS.length];
+    let randomByte;
+    do {
+      randomByte = crypto.randomBytes(1)[0];
+    } while (randomByte >= maxValid);
+    
+    code += SHORT_CODE_CHARS[randomByte % charsLength];
   }
   return code;
 }
@@ -959,10 +1006,13 @@ app.get('/api/admin/cards', requireAuth, apiLimiter, (req, res, next) => {
       let orgSlug = orgRow?.slug;
       // If organization doesn't have a slug, generate one from the organization name
       if (!orgSlug && orgRow?.name) {
+        // Fix ReDoS: use separate replace calls instead of alternation in single regex
         const generatedSlug = orgRow.name.toLowerCase()
           .trim()
           .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '') || 'organization';
+          .replace(/^-+/, '')  // Remove leading dashes (no alternation)
+          .replace(/-+$/, '')  // Remove trailing dashes (no alternation)
+          || 'organization';
         // Update organization with generated slug
         db.run("UPDATE organisations SET slug = ? WHERE id = ?", [generatedSlug, req.user.organisationId], (err) => {
           if (err) return next(err);
@@ -1214,7 +1264,7 @@ const shortCodeLimiter = rateLimit({
   legacyHeaders: false
 });
 
-app.get('/api/cards/short/:shortCode', (req, res, next) => {
+app.get('/api/cards/short/:shortCode', cardReadLimiter, (req, res, next) => {
   const shortCode = (req.params.shortCode || '').trim();
   log(`[API] GET /api/cards/short/${shortCode} - Request received`);
   
@@ -1265,7 +1315,7 @@ app.get('/api/cards/short/:shortCode', (req, res, next) => {
 
 // GET Org-scoped Card (Public endpoint - org slug + card slug)
 // MUST come after /api/cards/short/:shortCode
-app.get('/api/cards/:orgSlug/:cardSlug', [
+app.get('/api/cards/:orgSlug/:cardSlug', cardReadLimiter, [
   param('orgSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid org slug'),
   param('cardSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid card slug')
 ], handleValidationErrors, (req, res, next) => {
@@ -1316,7 +1366,7 @@ app.get('/api/cards/:orgSlug/:cardSlug', [
 });
 
 // GET Single Card (Legacy endpoint - returns first match by slug, deprecated)
-app.get('/api/cards/:slug', [
+app.get('/api/cards/:slug', cardReadLimiter, [
   slugValidation
 ], handleValidationErrors, (req, res, next) => {
   const slug = req.params.slug.toLowerCase();
@@ -1680,7 +1730,7 @@ const getThemeColorHex = (colorName) => {
 // GET Public Settings (theme_colors and theme_variant, no auth required)
 // Returns theme_colors and theme_variant from specified organization or default organization
 // Accepts optional ?orgSlug= parameter to get settings for a specific organization
-app.get('/api/settings', (req, res, next) => {
+app.get('/api/settings', apiLimiter, (req, res, next) => {
   const orgSlug = req.query.orgSlug || 'default';
   
   // Get theme_colors and theme_variant from specified organization
@@ -2188,7 +2238,7 @@ app.post('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter
 });
 
 // GET Invitation Details (Public)
-app.get('/api/invitations/:token', [
+app.get('/api/invitations/:token', publicReadLimiter, [
   param('token').isLength({ min: 64, max: 64 }).withMessage('Invalid invitation token')
 ], handleValidationErrors, (req, res, next) => {
   const { token } = req.params;
@@ -2218,7 +2268,7 @@ app.get('/api/invitations/:token', [
 });
 
 // POST Accept Invitation
-app.post('/api/invitations/:token/accept', [
+app.post('/api/invitations/:token/accept', publicReadLimiter, [
   param('token').isLength({ min: 64, max: 64 }).withMessage('Invalid invitation token'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
 ], handleValidationErrors, async (req, res, next) => {
@@ -2535,7 +2585,7 @@ app.post('/api/auth/send-verification', requireAuth, apiLimiter, csrfProtection,
 });
 
 // GET Verify Email (with token)
-app.get('/api/auth/verify-email/:token', [
+app.get('/api/auth/verify-email/:token', publicReadLimiter, [
   param('token').isLength({ min: 64, max: 64 }).withMessage('Invalid verification token')
 ], handleValidationErrors, (req, res, next) => {
   const { token } = req.params;
@@ -2583,7 +2633,7 @@ app.get('/api/auth/verify-email/:token', [
 });
 
 // Dynamic per-card manifest endpoint
-app.get('/manifest/:slug.json', [
+app.get('/manifest/:slug.json', publicReadLimiter, [
   identifierValidation
 ], handleValidationErrors, async (req, res, next) => {
   // Get original identifier (before lowercasing) to preserve short code case
@@ -2677,7 +2727,7 @@ app.get('/manifest/:slug.json', [
 });
 
 // Dynamic themed SVG icon endpoint
-app.get('/icons/:slug.svg', [
+app.get('/icons/:slug.svg', publicReadLimiter, [
   identifierValidation
 ], handleValidationErrors, (req, res, next) => {
   const slug = req.params.slug.toLowerCase();
@@ -2779,7 +2829,7 @@ app.get('/api/admin/logs', requireAuth, apiLimiter, (req, res, next) => {
 
 // QR Code Generation Endpoint
 // GET: accepts slug or short code, generates QR with short code URL
-app.get('/api/qr/:identifier', [
+app.get('/api/qr/:identifier', publicReadLimiter, [
   param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier')
 ], handleValidationErrors, async (req, res, next) => {
   try {
@@ -2832,7 +2882,7 @@ app.get('/api/qr/:identifier', [
 
 // POST: optionally accept a rich payload to encode in the QR,
 // falling back to the card short code URL if payload is missing/invalid.
-app.post('/api/qr/:identifier', [
+app.post('/api/qr/:identifier', publicReadLimiter, [
   param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier'),
   body('payload')
     .optional()
@@ -2905,7 +2955,7 @@ app.post('/api/qr/:identifier', [
 app.use(errorHandler);
 
 // SPA Fallback - only for non-API and non-static routes
-app.get('*', async (req, res, next) => {
+app.get('*', publicReadLimiter, async (req, res, next) => {
   // Don't serve index.html for static assets or API routes
   if (req.path.startsWith('/static/') || req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/manifest/') || req.path.startsWith('/icons/')) {
     return res.status(404).json({ error: 'Not found' });
@@ -2916,9 +2966,9 @@ app.get('*', async (req, res, next) => {
     const indexPath = path.join(__dirname, 'build', 'index.html');
     let html = await fs.promises.readFile(indexPath, 'utf8');
     
-    // Inject nonce into script tags
+    // Inject nonce into script tags (case-insensitive to catch all variants)
     html = html.replace(
-      /<script(\s|>)/g,
+      /<script(\s|>)/gi,
       `<script nonce="${res.locals.nonce}"$1`
     );
     
