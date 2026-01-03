@@ -20,6 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Logo positioning fixed in both QR and card views to consistently appear at bottom of screen
 - Desktop spacing optimized: QR/details at top, controls/logo at bottom with minimal padding between
 
+## [0.2.2] - 2026-01-03
+
+### Security
+- **Fixed critical path injection vulnerability**: Added `validateFilePath()` function to prevent path traversal attacks in file upload handler. All file deletion operations now validate paths to ensure they remain within the uploads directory.
+- **Fixed biased cryptographic random number generation**: Updated `generateShortCode()` function to use rejection sampling instead of modulo operation, ensuring uniform distribution of short code characters and eliminating bias.
+- **Fixed polynomial ReDoS vulnerability**: Refactored organization slug generation to use separate `replace()` calls instead of regex alternation pattern, preventing potential denial-of-service attacks from crafted input with many dashes.
+- **Fixed case-insensitive script tag filtering**: Updated CSP nonce injection regex to be case-insensitive (`/gi` flag), ensuring all script tag variants (`<SCRIPT>`, `<Script>`, etc.) receive nonce attributes for proper Content Security Policy enforcement.
+- **Added comprehensive rate limiting**: Implemented rate limiting on 23 routes that were previously unprotected:
+  - Added `publicReadLimiter` (300 requests per 15 minutes) for public read endpoints
+  - Added `cardReadLimiter` (200 requests per 15 minutes) for card read endpoints
+  - Applied rate limiting to all card endpoints, invitation endpoints, email verification, manifest/icon endpoints, QR endpoints, and SPA fallback route
+
+### Technical
+- All code scanning alerts resolved (30 total: 4 path injection, 1 biased random, 1 ReDoS, 1 bad tag filter, 23 missing rate limiting)
+- Security improvements maintain backward compatibility
+- Rate limiting configured with appropriate limits for different endpoint types
+
 ## [0.2.1] - 2025-12-28
 
 ### Fixed
