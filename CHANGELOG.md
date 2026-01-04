@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Added graceful shutdown handler to properly close database connection on server shutdown, preventing file lock issues on Windows when deleting cards.db
+
 ### Changed
 - Version badge now shows blue border when code is ahead of latest GitHub release (instead of red)
 - Version comparison now follows SemVer precedence rules, properly handling pre-release versions (e.g., `0.2.2-dev` vs `0.2.1`)
@@ -19,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop QR view uses minimum height container instead of full screen for better layout
 - Logo positioning fixed in both QR and card views to consistently appear at bottom of screen
 - Desktop spacing optimized: QR/details at top, controls/logo at bottom with minimal padding between
+- Setup page footer styling updated: removed border, increased top padding, removed bottom padding
 
 ## [0.2.2] - 2026-01-03
 

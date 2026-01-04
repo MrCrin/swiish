@@ -3014,7 +3014,7 @@ function runMigrations() {
 // Run migrations and start server
 runMigrations();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   // Startup logs are always useful, keep them
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${NODE_ENV}`);
@@ -3022,3 +3022,33 @@ app.listen(PORT, () => {
     console.log('HTTPS enforcement and security features enabled');
   }
 });
+
+// Graceful shutdown handler to close database connection
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received. Closing database connection and shutting down gracefully...`);
+  
+  // Close database connection
+  db.close((err) => {
+    if (err) {
+      console.error('Error closing database:', err.message);
+    } else {
+      console.log('Database connection closed.');
+    }
+    
+    // Close server
+    server.close(() => {
+      console.log('Server closed.');
+      process.exit(0);
+    });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  });
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

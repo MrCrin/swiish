@@ -1646,7 +1646,7 @@ const [settings, setSettings] = useState({
                 {isSettingUp ? 'Setting up...' : 'Complete Setup'}
               </button>
             </form>
-            <div className="text-center mt-auto pt-4 pb-4 border-t border-border-subtle dark:border-border-dark group relative z-10">
+            <div className="text-center mt-auto pt-8 pb-0 group relative z-10" style={{ boxSizing: 'content-box' }}>
               <div className="flex justify-center">
                 <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
                 <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
@@ -2211,7 +2211,7 @@ const [settings, setSettings] = useState({
                   {isSettingUp ? 'Setting up...' : 'Complete Setup'}
                 </button>
               </form>
-              <div className="text-center mt-auto pt-4 pb-4 border-t border-border-subtle dark:border-border-dark group relative z-10">
+              <div className="text-center mt-auto pt-8 pb-0 group relative z-10" style={{ boxSizing: 'content-box' }}>
                 <div className="flex justify-center">
                   <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
                   <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
@@ -3210,7 +3210,7 @@ END:VCARD`;
 
           {/* Swiish logo */}
           <div className="bg-card dark:bg-card-dark text-center space-y-2 mt-[24px] mb-[12px]">
-            <div className="flex justify-center">
+            <div className="flex justify-center py-4">
               <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
               <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
             </div>
