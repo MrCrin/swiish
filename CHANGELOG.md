@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Added graceful shutdown handler to properly close database connection on server shutdown, preventing file lock issues on Windows when deleting cards.db
+- Fixed profile picture not displaying in card preview when editing - avatar container was collapsing due to flex layout, added `min-h-32 flex-shrink-0` to prevent height collapse
 
 ### Changed
 - Version badge now shows blue border when code is ahead of latest GitHub release (instead of red)

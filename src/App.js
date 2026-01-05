@@ -3321,7 +3321,7 @@ END:VCARD`;
       </div>
 
       <div className="px-6 pb-6 -mt-16 relative flex-1 flex flex-col min-h-0">
-        <div className="w-32 h-32 rounded-full border-avatar border-white dark:border-card-dark shadow-xl overflow-hidden bg-card dark:bg-card-dark relative mb-4">
+        <div className="w-32 h-32 min-h-[8rem] flex-shrink-0 rounded-full border-avatar border-white dark:border-card-dark shadow-xl overflow-hidden bg-card dark:bg-card-dark relative mb-4">
           {images.avatar ? <img src={images.avatar} className="w-full h-full object-cover" alt="avatar" /> : <div className="w-full h-full bg-surface dark:bg-surface-dark flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark"><User className="w-12 h-12" /></div>}
         </div>
 
