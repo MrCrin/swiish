@@ -1523,24 +1523,29 @@ const [settings, setSettings] = useState({
 
   const handleSave = async () => {
     const performSave = async () => {
-      // Include userId in request body if creating card for another user
-      const body = { ...data };
-      if (targetUserIdForNewCard) {
-        body.userId = targetUserIdForNewCard;
-      }
-      
-      const res = await apiCall(`${API_ENDPOINT}/cards/${currentSlug}`, {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-      if (res.ok) {
-        // Clear targetUserIdForNewCard after successful save
-        setTargetUserIdForNewCard(null);
-        showAlert('Saved!', 'success', '', () => {
-          fetchCardList();
+      setIsSaving(true);
+      try {
+        // Include userId in request body if creating card for another user
+        const body = { ...data };
+        if (targetUserIdForNewCard) {
+          body.userId = targetUserIdForNewCard;
+        }
+
+        const res = await apiCall(`${API_ENDPOINT}/cards/${currentSlug}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
         });
-      } else {
-        showAlert('Save failed', 'error');
+        if (res.ok) {
+          // Clear targetUserIdForNewCard after successful save
+          setTargetUserIdForNewCard(null);
+          showAlert('Saved!', 'success', '', () => {
+            fetchCardList();
+          });
+        } else {
+          showAlert('Save failed', 'error');
+        }
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -3591,6 +3596,7 @@ END:VCARD`;
 function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode }) {
   const [activeTab, setActiveTab] = useState('details');
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 }
@@ -3686,8 +3692,17 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                <h1 className="text-xl font-bold text-text-primary dark:text-text-primary-dark">Editing: {slug}</h1>
              </div>
           </div>
-          <button onClick={onSave} className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors">
-            <Save className="w-4 h-4" /> Save
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors disabled:opacity-50"
+          >
+            {isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
 
