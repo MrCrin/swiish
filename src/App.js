@@ -3588,6 +3588,15 @@ END:VCARD`;
   );
 }
 
+function SortableLinkItem({ link, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: link.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition
+  };
+  return children({ setNodeRef, style, attributes, listeners });
+}
+
 function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode }) {
   const [activeTab, setActiveTab] = useState('details');
   const [isUploading, setIsUploading] = useState(false);
@@ -3665,15 +3674,6 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     const newIndex = data.links.findIndex(link => link.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
     reorderLinks(oldIndex, newIndex);
-  };
-
-  const SortableLinkItem = ({ link, children }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: link.id });
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition
-    };
-    return children({ setNodeRef, style, attributes, listeners });
   };
 
   return (
