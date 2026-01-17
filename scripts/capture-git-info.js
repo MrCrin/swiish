@@ -16,19 +16,36 @@ function getGitBranch() {
   
   // 1. Try to get the branch name from git first (if .git folder is present)
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    }).trim();
+    // Fix for "dubious ownership" in Docker/CI environments
+    try {
+      execSync('git config --global --add safe.directory /app', { stdio: 'ignore' });
+    } catch (e) {
+      // Ignore errors setting safe directory
+    }
+
+    // Try multiple ways to get the branch name
+    let branch = null;
     
-    console.log(`Git command returned: "${branch}"`);
+    // Method A: git branch --show-current (Modern git)
+    try {
+      branch = execSync('git branch --show-current', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    } catch (e) {}
+
+    // Method B: git rev-parse --abbrev-ref HEAD (Legacy/Fallback)
+    if (!branch || branch === '') {
+      try {
+        branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      } catch (e) {}
+    }
+    
+    console.log(`Git command returned: "${branch || 'null'}"`);
     
     // If we got a valid branch (not HEAD), return it
-    if (branch && branch !== 'HEAD') {
+    if (branch && branch !== 'HEAD' && branch !== '') {
       return branch;
     }
   } catch (error) {
-    console.log('Git detection failed (is git installed and is this a repo?)');
+    console.log(`Git detection failed: ${error.message}`);
   }
 
   // 2. Fallback to environment variable (useful for CI/Docker where .git might be missing)

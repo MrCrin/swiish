@@ -15,10 +15,11 @@ COPY public/ public/
 COPY src/ src/
 COPY .git/ .git/
 
-# Create version.json with the branch info (using the script for reliability)
-RUN node scripts/capture-git-info.js && rm -rf .git
+# Configure git to trust the directory (fixes dubious ownership in Docker)
+RUN git config --global --add safe.directory /app
 
-RUN npm run build
+# Build the app (this triggers prebuild which runs capture-git-info.js)
+RUN npm run build && rm -rf .git
 
 # Production Stage
 FROM node:18-alpine
