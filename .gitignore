@@ -28,6 +28,7 @@ uploads/*
 # IDE files
 .cursor/
 .vscode/
+.kilocode/
 .idea/
 *.swp
 *.swo
