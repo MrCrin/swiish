@@ -540,13 +540,13 @@ function VersionBadge() {
     : `v${APP_VERSION}`;
   
   // Build the tooltip
-  const tooltip = showBranch
-    ? `Branch: ${GIT_BRANCH}${isOutdated ? ' - Update available on GitHub' : isAhead ? ' - Ahead of latest release' : ''}`
-    : isOutdated 
-      ? 'Update available on GitHub' 
-      : isAhead 
-        ? 'Ahead of latest release on GitHub' 
-        : 'View on GitHub';
+  const tooltip = (!isOutdated && !isAhead && !showBranch)
+    ? "You are on the latest release"
+    : (isAhead || showBranch)
+      ? "You are on an unreleased development version - things may break"
+      : isOutdated
+        ? "Update available on GitHub"
+        : "View on GitHub";
 
   return (
     <div className="fixed bottom-4 left-4 z-50">
@@ -609,6 +609,8 @@ export default function App() {
   const [setupStatus, setSetupStatus] = useState(null);
   const [setupData, setSetupData] = useState({ organisationName: '', adminEmail: '', adminPassword: '' });
   const [isSettingUp, setIsSettingUp] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
@@ -1560,6 +1562,7 @@ const [settings, setSettings] = useState({
   const handleSave = async () => {
     const performSave = async () => {
       setIsSaving(true);
+      const startTime = Date.now();
       try {
         // Include userId in request body if creating card for another user
         const body = { ...data };
@@ -1571,12 +1574,19 @@ const [settings, setSettings] = useState({
           method: 'POST',
           body: JSON.stringify(body)
         });
+
+        // Ensure at least 1 second has passed
+        const elapsedTime = Date.now() - startTime;
+        if (elapsedTime < 1000) {
+          await new Promise(resolve => setTimeout(resolve, 1000 - elapsedTime));
+        }
+
         if (res.ok) {
           // Clear targetUserIdForNewCard after successful save
           setTargetUserIdForNewCard(null);
-          showAlert('Saved!', 'success', '', () => {
-            fetchCardList();
-          });
+          setIsSuccess(true);
+          fetchCardList();
+          setTimeout(() => setIsSuccess(false), 2000);
         } else {
           showAlert('Save failed', 'error');
         }
@@ -2127,6 +2137,8 @@ const [settings, setSettings] = useState({
           showAlert={showAlert}
           darkMode={darkMode}
           toggleDarkMode={toggleDarkMode}
+          isSaving={isSaving}
+          isSuccess={isSuccess}
         />
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
@@ -2674,6 +2686,8 @@ const [settings, setSettings] = useState({
             showAlert={showAlert}
             darkMode={darkMode}
             toggleDarkMode={toggleDarkMode}
+            isSaving={isSaving}
+            isSuccess={isSuccess}
           />
           <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
@@ -3638,10 +3652,9 @@ function SortableLinkItem({ link, children }) {
   return children({ setNodeRef, style, attributes, listeners });
 }
 
-function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode }) {
+function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode, isSaving, isSuccess }) {
   const [activeTab, setActiveTab] = useState('details');
   const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 }
@@ -3735,10 +3748,12 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
           >
             {isSaving ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : isSuccess ? (
+              <Check className="w-4 h-4 text-green-500" />
             ) : (
               <Save className="w-4 h-4" />
             )}
-            {isSaving ? 'Saving...' : 'Save'}
+            Save
           </button>
         </div>
 
