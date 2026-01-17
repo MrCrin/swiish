@@ -49,7 +49,10 @@
     "validator": "^13.11.0"
   },
   "scripts": {
+    "capture-git-info": "node scripts/capture-git-info.js",
+    "prestart": "npm run capture-git-info",
     "start": "react-scripts start",
+    "prebuild": "npm run capture-git-info",
     "build": "react-scripts build",
     "serve": "node server.js",
     "migrate": "db-migrate up",

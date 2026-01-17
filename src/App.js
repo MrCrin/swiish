@@ -21,6 +21,16 @@ import { arrayMove } from '@dnd-kit/sortable';
 const API_ENDPOINT = '/api';
 const APP_VERSION = require('../package.json').version; // Automatically read from package.json
 const GITHUB_URL = 'https://github.com/MrCrin/swiish';
+
+// Try to read branch info from version.json (generated at build time)
+let GIT_BRANCH = null;
+try {
+  const versionInfo = require('./version.json');
+  GIT_BRANCH = versionInfo.branch;
+} catch (e) {
+  // version.json doesn't exist yet (first run before build)
+  GIT_BRANCH = null;
+}
 const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
@@ -405,6 +415,16 @@ function VersionBadge() {
   const [isOutdated, setIsOutdated] = useState(false);
   const [isAhead, setIsAhead] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  
+  // Determine if we're on a non-release branch
+  // Show branch name if it's not main, master, or a version tag pattern (e.g., v0.3.1)
+  const isReleaseBranch = !GIT_BRANCH || 
+    GIT_BRANCH === 'main' || 
+    GIT_BRANCH === 'master' || 
+    /^v?\d+\.\d+/.test(GIT_BRANCH) ||
+    GIT_BRANCH === 'HEAD'; // Detached HEAD state (common in CI/Docker)
+  
+  const showBranch = GIT_BRANCH && !isReleaseBranch;
 
   useEffect(() => {
     // Check GitHub for latest version
@@ -514,6 +534,20 @@ function VersionBadge() {
     checkVersion();
   }, []);
 
+  // Build the display string: "v0.3.1" or "v0.3.1 (feature-branch)"
+  const versionDisplay = showBranch 
+    ? `v${APP_VERSION} (${GIT_BRANCH})`
+    : `v${APP_VERSION}`;
+  
+  // Build the tooltip
+  const tooltip = showBranch
+    ? `Branch: ${GIT_BRANCH}${isOutdated ? ' - Update available on GitHub' : isAhead ? ' - Ahead of latest release' : ''}`
+    : isOutdated 
+      ? 'Update available on GitHub' 
+      : isAhead 
+        ? 'Ahead of latest release on GitHub' 
+        : 'View on GitHub';
+
   return (
     <div className="fixed bottom-4 left-4 z-50">
       <a
@@ -521,15 +555,17 @@ function VersionBadge() {
         target="_blank"
         rel="noopener noreferrer"
         className={`text-xs font-medium transition-all bg-card dark:bg-card-dark border-2 border-border dark:border-border-dark px-2 py-1 rounded shadow-sm hover:shadow-md ${
-          isOutdated 
-            ? 'text-error-text dark:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark hover:border-error-border dark:hover:border-error-border-dark' 
-            : isAhead
-            ? 'text-info-text dark:text-info-text-dark hover:bg-info-bg dark:hover:bg-info-bg-dark hover:border-info-border dark:hover:border-info-border-dark'
-            : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark hover:border-success-border dark:hover:border-success-border-dark'
+          showBranch
+            ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-300 dark:hover:border-amber-700'
+            : isOutdated 
+              ? 'text-error-text dark:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark hover:border-error-border dark:hover:border-error-border-dark' 
+              : isAhead
+                ? 'text-info-text dark:text-info-text-dark hover:bg-info-bg dark:hover:bg-info-bg-dark hover:border-info-border dark:hover:border-info-border-dark'
+                : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark hover:border-success-border dark:hover:border-success-border-dark'
         }`}
-        title={isOutdated ? "Update available on GitHub" : isAhead ? "Ahead of latest release on GitHub" : "View on GitHub"}
+        title={tooltip}
       >
-        v{APP_VERSION}
+        {versionDisplay}
       </a>
     </div>
   );
