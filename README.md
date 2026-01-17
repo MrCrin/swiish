@@ -1,5 +1,9 @@
 # Swiish
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/MrCrin/swiish/main/public/graphics/Swiish_Logo.svg" alt="Swiish Logo" width="200">
+</p>
+
 [![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/MrCrin/swiish/releases)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
