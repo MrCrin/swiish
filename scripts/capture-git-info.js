@@ -12,6 +12,11 @@ const path = require('path');
 const outputPath = path.join(__dirname, '..', 'src', 'version.json');
 
 function getGitBranch() {
+  // Check if branch is provided via environment variable (useful for Docker/CI)
+  if (process.env.GIT_BRANCH) {
+    return process.env.GIT_BRANCH;
+  }
+
   try {
     // Try to get the branch name from git
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {

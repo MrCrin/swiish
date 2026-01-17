@@ -14,8 +14,8 @@ RUN npm install
 COPY public/ public/
 COPY src/ src/
 
-# Create version.json with the branch info (since .git is not available in Docker)
-RUN echo "{\"branch\": \"${GIT_BRANCH}\", \"capturedAt\": \"$(date -Iseconds)\"}" > src/version.json
+# Create version.json with the branch info (using the script for reliability)
+RUN GIT_BRANCH=${GIT_BRANCH} node scripts/capture-git-info.js
 
 RUN npm run build
 
