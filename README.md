@@ -196,7 +196,7 @@ swiish/
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/MrCrin/swiish/blob/main/CONTRIBUTING.md) for details on how to get started.
+We welcome contributions!
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature`
