@@ -611,6 +611,9 @@ export default function App() {
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSuccessSetup, setIsSuccessSetup] = useState(false);
+  const [isSuccessCreateUser, setIsSuccessCreateUser] = useState(false);
+  const [isSuccessInvite, setIsSuccessInvite] = useState(false);
   
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
@@ -1324,6 +1327,8 @@ const [settings, setSettings] = useState({
       });
       if (res.ok) {
         // Setup successful, automatically log in
+        setIsSuccessSetup(true);
+        setTimeout(() => setIsSuccessSetup(false), 2000);
         const authResult = await checkAuth();
         if (authResult.isAuthenticated) {
           // Navigate to dashboard after successful setup (explicit user action)
@@ -1402,7 +1407,8 @@ const [settings, setSettings] = useState({
       });
       
       if (res.ok) {
-        if (showAlert) showAlert('User created successfully', 'success');
+        setIsSuccessCreateUser(true);
+        setTimeout(() => setIsSuccessCreateUser(false), 2000);
         setShowCreateUserModal(false);
         setNewUser({ email: '', password: '', role: 'member' });
         checkAuth(); // Refresh card list
@@ -1450,7 +1456,13 @@ const [settings, setSettings] = useState({
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (showAlert) showAlert('Invitation sent successfully', 'success');
+        if (typeof setIsSuccessInvite === 'function') {
+          setIsSuccessInvite(true);
+          setTimeout(() => setIsSuccessInvite(false), 2000);
+        } else if (typeof setIsSuccess === 'function') {
+          setIsSuccess(true);
+          setTimeout(() => setIsSuccess(false), 2000);
+        }
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
@@ -1575,10 +1587,10 @@ const [settings, setSettings] = useState({
           body: JSON.stringify(body)
         });
 
-        // Ensure at least 1 second has passed
+        // Ensure at least 500ms has passed
         const elapsedTime = Date.now() - startTime;
-        if (elapsedTime < 1000) {
-          await new Promise(resolve => setTimeout(resolve, 1000 - elapsedTime));
+        if (elapsedTime < 500) {
+          await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
         }
 
         if (res.ok) {
@@ -2008,8 +2020,15 @@ const [settings, setSettings] = useState({
               <button
                 onClick={handleSendInvitation}
                 disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSavingUser ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccessInvite ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSavingUser ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
@@ -2067,8 +2086,15 @@ const [settings, setSettings] = useState({
               <button
                 onClick={handleCreateUser}
                 disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSavingUser ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccessCreateUser ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSavingUser ? 'Creating...' : 'Create User'}
               </button>
             </div>
@@ -2156,8 +2182,6 @@ const [settings, setSettings] = useState({
           onSave={async () => {
             await fetchSettings();
             fetchCardList();
-            // Navigate to dashboard after saving (explicit user action)
-            navigate('/people');
           }}
           showAlert={showAlert}
           showConfirm={showConfirm}
@@ -2259,8 +2283,15 @@ const [settings, setSettings] = useState({
                 <button 
                   type="submit" 
                   disabled={isSettingUp}
-                  className="w-full py-3.5 rounded-full bg-action dark:bg-action-dark text-white font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 rounded-full bg-action dark:bg-action-dark text-white font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {isSettingUp ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : isSuccessSetup ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
                   {isSettingUp ? 'Setting up...' : 'Complete Setup'}
                 </button>
               </form>
@@ -2703,8 +2734,6 @@ const [settings, setSettings] = useState({
             onSave={async () => {
               await fetchSettings();
               fetchCardList();
-              // Navigate to dashboard after saving (explicit user action)
-              navigate('/people');
               }}
             showAlert={showAlert}
             showConfirm={showConfirm}
@@ -4229,6 +4258,7 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'member' });
   const [newInvitation, setNewInvitation] = useState({ email: '', role: 'member' });
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -4293,7 +4323,8 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       });
       
       if (res.ok) {
-        if (showAlert) showAlert('User created successfully', 'success');
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         setShowCreateUserModal(false);
         setNewUser({ email: '', password: '', role: 'member' });
         fetchUsers();
@@ -4340,7 +4371,13 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (showAlert) showAlert('Invitation sent successfully', 'success');
+        if (typeof setIsSuccessInvite === 'function') {
+          setIsSuccessInvite(true);
+          setTimeout(() => setIsSuccessInvite(false), 2000);
+        } else if (typeof setIsSuccess === 'function') {
+          setIsSuccess(true);
+          setTimeout(() => setIsSuccess(false), 2000);
+        }
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
@@ -4591,8 +4628,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSaving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccess ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSaving ? 'Creating...' : 'Create User'}
               </button>
             </div>
@@ -4642,8 +4686,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
               <button
                 onClick={handleSendInvitation}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSaving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccess ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSaving ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
@@ -4739,6 +4790,7 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
   });
   const [editingColorIndex, setEditingColorIndex] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isOrganisationNameOpen, setIsOrganisationNameOpen] = useState(false);
   const [isCustomizationControlsOpen, setIsCustomizationControlsOpen] = useState(false);
   const [isThemeColorsOpen, setIsThemeColorsOpen] = useState(false);
@@ -4778,6 +4830,7 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
 
   const handleSave = async () => {
     setIsSaving(true);
+    const startTime = Date.now();
     try {
       // Save hex-only color structure
       const colorsToSave = localSettings.theme_colors.map(color => {
@@ -4806,10 +4859,18 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
           allow_privacy_customisation: Boolean(localSettings.allow_privacy_customisation)
         })
       });
+
+      // Ensure at least 500ms has passed
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime < 500) {
+        await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
+      }
+
       if (res.ok) {
         // Refetch from server to get the latest saved data
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         await onSave();
-        if (showAlert) showAlert('Settings saved!', 'success');
       } else {
         const errorData = await res.json().catch(() => ({}));
         console.error('Save failed:', errorData);
@@ -4998,7 +5059,14 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
             disabled={isSaving}
             className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors disabled:opacity-50"
           >
-            <Save className="w-4 h-4" /> {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : isSuccess ? (
+              <Check className="w-4 h-4 text-green-500" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
 
