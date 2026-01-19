@@ -1456,13 +1456,8 @@ const [settings, setSettings] = useState({
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (typeof setIsSuccessInvite === 'function') {
-          setIsSuccessInvite(true);
-          setTimeout(() => setIsSuccessInvite(false), 2000);
-        } else if (typeof setIsSuccess === 'function') {
-          setIsSuccess(true);
-          setTimeout(() => setIsSuccess(false), 2000);
-        }
+        setIsSuccessInvite(true);
+        setTimeout(() => setIsSuccessInvite(false), 2000);
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
@@ -4371,13 +4366,8 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (typeof setIsSuccessInvite === 'function') {
-          setIsSuccessInvite(true);
-          setTimeout(() => setIsSuccessInvite(false), 2000);
-        } else if (typeof setIsSuccess === 'function') {
-          setIsSuccess(true);
-          setTimeout(() => setIsSuccess(false), 2000);
-        }
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
