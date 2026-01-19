@@ -6,6 +6,9 @@ package-lock.json
 build/
 dist/
 
+# Generated files
+src/active-branch.json
+
 # Environment files
 .env
 .env.local
@@ -28,6 +31,7 @@ uploads/*
 # IDE files
 .cursor/
 .vscode/
+.kilocode/
 .idea/
 *.swp
 *.swo
