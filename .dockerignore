@@ -7,7 +7,7 @@ dist
 .env.development
 .env.production
 .env.test
-.git
+# .git
 .gitignore
 README.md
 README-SECURITY.md

@@ -21,6 +21,16 @@ import { arrayMove } from '@dnd-kit/sortable';
 const API_ENDPOINT = '/api';
 const APP_VERSION = require('../package.json').version; // Automatically read from package.json
 const GITHUB_URL = 'https://github.com/MrCrin/swiish';
+
+// Try to read branch info from active-branch.json (generated at build time)
+let GIT_BRANCH = null;
+try {
+  const branchInfo = require('./active-branch.json');
+  GIT_BRANCH = branchInfo.branch;
+} catch (e) {
+  // active-branch.json doesn't exist yet (first run before build)
+  GIT_BRANCH = null;
+}
 const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
@@ -405,6 +415,16 @@ function VersionBadge() {
   const [isOutdated, setIsOutdated] = useState(false);
   const [isAhead, setIsAhead] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  
+  // Determine if we're on a non-release branch
+  // Show branch name if it's not main, master, or a version tag pattern (e.g., v0.3.1)
+  const isReleaseBranch = !GIT_BRANCH || 
+    GIT_BRANCH === 'main' || 
+    GIT_BRANCH === 'master' || 
+    /^v?\d+\.\d+/.test(GIT_BRANCH) ||
+    GIT_BRANCH === 'HEAD'; // Detached HEAD state (common in CI/Docker)
+  
+  const showBranch = GIT_BRANCH && !isReleaseBranch;
 
   useEffect(() => {
     // Check GitHub for latest version
@@ -514,6 +534,20 @@ function VersionBadge() {
     checkVersion();
   }, []);
 
+  // Build the display string: "v0.3.1" or "v0.3.1 (feature-branch)"
+  const versionDisplay = showBranch 
+    ? `v${APP_VERSION} (${GIT_BRANCH})`
+    : `v${APP_VERSION}`;
+  
+  // Build the tooltip
+  const tooltip = (!isOutdated && !isAhead && !showBranch)
+    ? "You are on the latest release"
+    : (isAhead || showBranch)
+      ? "You are on an unreleased development version - things may break"
+      : isOutdated
+        ? "Update available on GitHub"
+        : "View on GitHub";
+
   return (
     <div className="fixed bottom-4 left-4 z-50">
       <a
@@ -521,15 +555,17 @@ function VersionBadge() {
         target="_blank"
         rel="noopener noreferrer"
         className={`text-xs font-medium transition-all bg-card dark:bg-card-dark border-2 border-border dark:border-border-dark px-2 py-1 rounded shadow-sm hover:shadow-md ${
-          isOutdated 
-            ? 'text-error-text dark:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark hover:border-error-border dark:hover:border-error-border-dark' 
-            : isAhead
-            ? 'text-info-text dark:text-info-text-dark hover:bg-info-bg dark:hover:bg-info-bg-dark hover:border-info-border dark:hover:border-info-border-dark'
-            : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark hover:border-success-border dark:hover:border-success-border-dark'
+          showBranch
+            ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-300 dark:hover:border-amber-700'
+            : isOutdated 
+              ? 'text-error-text dark:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark hover:border-error-border dark:hover:border-error-border-dark' 
+              : isAhead
+                ? 'text-info-text dark:text-info-text-dark hover:bg-info-bg dark:hover:bg-info-bg-dark hover:border-info-border dark:hover:border-info-border-dark'
+                : 'text-text-primary dark:text-text-primary-dark hover:text-action dark:hover:text-action-dark hover:border-success-border dark:hover:border-success-border-dark'
         }`}
-        title={isOutdated ? "Update available on GitHub" : isAhead ? "Ahead of latest release on GitHub" : "View on GitHub"}
+        title={tooltip}
       >
-        v{APP_VERSION}
+        {versionDisplay}
       </a>
     </div>
   );
@@ -573,6 +609,11 @@ export default function App() {
   const [setupStatus, setSetupStatus] = useState(null);
   const [setupData, setSetupData] = useState({ organisationName: '', adminEmail: '', adminPassword: '' });
   const [isSettingUp, setIsSettingUp] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isSuccessSetup, setIsSuccessSetup] = useState(false);
+  const [isSuccessCreateUser, setIsSuccessCreateUser] = useState(false);
+  const [isSuccessInvite, setIsSuccessInvite] = useState(false);
   
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
@@ -1286,6 +1327,8 @@ const [settings, setSettings] = useState({
       });
       if (res.ok) {
         // Setup successful, automatically log in
+        setIsSuccessSetup(true);
+        setTimeout(() => setIsSuccessSetup(false), 2000);
         const authResult = await checkAuth();
         if (authResult.isAuthenticated) {
           // Navigate to dashboard after successful setup (explicit user action)
@@ -1364,7 +1407,8 @@ const [settings, setSettings] = useState({
       });
       
       if (res.ok) {
-        if (showAlert) showAlert('User created successfully', 'success');
+        setIsSuccessCreateUser(true);
+        setTimeout(() => setIsSuccessCreateUser(false), 2000);
         setShowCreateUserModal(false);
         setNewUser({ email: '', password: '', role: 'member' });
         checkAuth(); // Refresh card list
@@ -1412,7 +1456,8 @@ const [settings, setSettings] = useState({
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (showAlert) showAlert('Invitation sent successfully', 'success');
+        setIsSuccessInvite(true);
+        setTimeout(() => setIsSuccessInvite(false), 2000);
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
@@ -1523,24 +1568,37 @@ const [settings, setSettings] = useState({
 
   const handleSave = async () => {
     const performSave = async () => {
-      // Include userId in request body if creating card for another user
-      const body = { ...data };
-      if (targetUserIdForNewCard) {
-        body.userId = targetUserIdForNewCard;
-      }
-      
-      const res = await apiCall(`${API_ENDPOINT}/cards/${currentSlug}`, {
-        method: 'POST',
-        body: JSON.stringify(body)
-      });
-      if (res.ok) {
-        // Clear targetUserIdForNewCard after successful save
-        setTargetUserIdForNewCard(null);
-        showAlert('Saved!', 'success', '', () => {
-          fetchCardList();
+      setIsSaving(true);
+      const startTime = Date.now();
+      try {
+        // Include userId in request body if creating card for another user
+        const body = { ...data };
+        if (targetUserIdForNewCard) {
+          body.userId = targetUserIdForNewCard;
+        }
+
+        const res = await apiCall(`${API_ENDPOINT}/cards/${currentSlug}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
         });
-      } else {
-        showAlert('Save failed', 'error');
+
+        // Ensure at least 500ms has passed
+        const elapsedTime = Date.now() - startTime;
+        if (elapsedTime < 500) {
+          await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
+        }
+
+        if (res.ok) {
+          // Clear targetUserIdForNewCard after successful save
+          setTargetUserIdForNewCard(null);
+          setIsSuccess(true);
+          fetchCardList();
+          setTimeout(() => setIsSuccess(false), 2000);
+        } else {
+          showAlert('Save failed', 'error');
+        }
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -1957,8 +2015,15 @@ const [settings, setSettings] = useState({
               <button
                 onClick={handleSendInvitation}
                 disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSavingUser ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccessInvite ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSavingUser ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
@@ -2016,8 +2081,15 @@ const [settings, setSettings] = useState({
               <button
                 onClick={handleCreateUser}
                 disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSavingUser ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccessCreateUser ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSavingUser ? 'Creating...' : 'Create User'}
               </button>
             </div>
@@ -2086,6 +2158,8 @@ const [settings, setSettings] = useState({
           showAlert={showAlert}
           darkMode={darkMode}
           toggleDarkMode={toggleDarkMode}
+          isSaving={isSaving}
+          isSuccess={isSuccess}
         />
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
@@ -2103,8 +2177,6 @@ const [settings, setSettings] = useState({
           onSave={async () => {
             await fetchSettings();
             fetchCardList();
-            // Navigate to dashboard after saving (explicit user action)
-            navigate('/people');
           }}
           showAlert={showAlert}
           showConfirm={showConfirm}
@@ -2206,8 +2278,15 @@ const [settings, setSettings] = useState({
                 <button 
                   type="submit" 
                   disabled={isSettingUp}
-                  className="w-full py-3.5 rounded-full bg-action dark:bg-action-dark text-white font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 rounded-full bg-action dark:bg-action-dark text-white font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {isSettingUp ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : isSuccessSetup ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
                   {isSettingUp ? 'Setting up...' : 'Complete Setup'}
                 </button>
               </form>
@@ -2633,6 +2712,8 @@ const [settings, setSettings] = useState({
             showAlert={showAlert}
             darkMode={darkMode}
             toggleDarkMode={toggleDarkMode}
+            isSaving={isSaving}
+            isSuccess={isSuccess}
           />
           <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
@@ -2648,8 +2729,6 @@ const [settings, setSettings] = useState({
             onSave={async () => {
               await fetchSettings();
               fetchCardList();
-              // Navigate to dashboard after saving (explicit user action)
-              navigate('/people');
               }}
             showAlert={showAlert}
             showConfirm={showConfirm}
@@ -3588,7 +3667,16 @@ END:VCARD`;
   );
 }
 
-function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode }) {
+function SortableLinkItem({ link, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: link.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition
+  };
+  return children({ setNodeRef, style, attributes, listeners });
+}
+
+function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, showAlert, darkMode, toggleDarkMode, isSaving, isSuccess }) {
   const [activeTab, setActiveTab] = useState('details');
   const [isUploading, setIsUploading] = useState(false);
   const sensors = useSensors(
@@ -3667,15 +3755,6 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     reorderLinks(oldIndex, newIndex);
   };
 
-  const SortableLinkItem = ({ link, children }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: link.id });
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition
-    };
-    return children({ setNodeRef, style, attributes, listeners });
-  };
-
   return (
     <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture flex flex-col lg:flex-row">
       <div className="w-full lg:w-1/2 bg-card dark:bg-card-dark border-r border-border dark:border-border-dark h-auto lg:h-screen overflow-y-auto flex flex-col">
@@ -3686,8 +3765,19 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                <h1 className="text-xl font-bold text-text-primary dark:text-text-primary-dark">Editing: {slug}</h1>
              </div>
           </div>
-          <button onClick={onSave} className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors">
-            <Save className="w-4 h-4" /> Save
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors disabled:opacity-50"
+          >
+            {isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : isSuccess ? (
+              <Check className="w-4 h-4 text-green-500" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Save
           </button>
         </div>
 
@@ -4163,6 +4253,7 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
   const [newUser, setNewUser] = useState({ email: '', password: '', role: 'member' });
   const [newInvitation, setNewInvitation] = useState({ email: '', role: 'member' });
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -4227,7 +4318,8 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       });
       
       if (res.ok) {
-        if (showAlert) showAlert('User created successfully', 'success');
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         setShowCreateUserModal(false);
         setNewUser({ email: '', password: '', role: 'member' });
         fetchUsers();
@@ -4274,7 +4366,8 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
-        if (showAlert) showAlert('Invitation sent successfully', 'success');
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
       } else {
@@ -4525,8 +4618,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSaving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccess ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSaving ? 'Creating...' : 'Create User'}
               </button>
             </div>
@@ -4576,8 +4676,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
               <button
                 onClick={handleSendInvitation}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSaving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : isSuccess ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 {isSaving ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
@@ -4673,6 +4780,7 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
   });
   const [editingColorIndex, setEditingColorIndex] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isOrganisationNameOpen, setIsOrganisationNameOpen] = useState(false);
   const [isCustomizationControlsOpen, setIsCustomizationControlsOpen] = useState(false);
   const [isThemeColorsOpen, setIsThemeColorsOpen] = useState(false);
@@ -4712,6 +4820,7 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
 
   const handleSave = async () => {
     setIsSaving(true);
+    const startTime = Date.now();
     try {
       // Save hex-only color structure
       const colorsToSave = localSettings.theme_colors.map(color => {
@@ -4740,10 +4849,18 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
           allow_privacy_customisation: Boolean(localSettings.allow_privacy_customisation)
         })
       });
+
+      // Ensure at least 500ms has passed
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime < 500) {
+        await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
+      }
+
       if (res.ok) {
         // Refetch from server to get the latest saved data
+        setIsSuccess(true);
+        setTimeout(() => setIsSuccess(false), 2000);
         await onSave();
-        if (showAlert) showAlert('Settings saved!', 'success');
       } else {
         const errorData = await res.json().catch(() => ({}));
         console.error('Save failed:', errorData);
@@ -4932,7 +5049,14 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
             disabled={isSaving}
             className="px-5 py-2 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-full text-sm font-bold flex items-center gap-2 hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors disabled:opacity-50"
           >
-            <Save className="w-4 h-4" /> {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : isSuccess ? (
+              <Check className="w-4 h-4 text-green-500" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
 

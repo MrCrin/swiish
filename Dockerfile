@@ -1,18 +1,31 @@
 # Build Stage
 FROM node:18-alpine as build
 WORKDIR /app
+
+# Install git to allow branch detection
+RUN apk add --no-cache git
+
 COPY package*.json ./
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
+COPY scripts/ scripts/
 RUN npm install
+
 COPY public/ public/
 COPY src/ src/
-RUN npm run build
+COPY .git/ .git/
+
+# Configure git to trust the directory (fixes dubious ownership in Docker)
+RUN git config --global --add safe.directory /app
+
+# Build the app (this triggers prebuild which runs capture-git-info.js)
+RUN npm run build && rm -rf .git
 
 # Production Stage
 FROM node:18-alpine
 WORKDIR /app
 COPY --from=build /app/build ./build
+COPY --from=build /app/src/active-branch.json ./active-branch.json
 COPY package*.json ./
 RUN npm install --production
 COPY server.js .

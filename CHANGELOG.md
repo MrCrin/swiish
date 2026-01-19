@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-18
+
+### Added
+- **Git Branch Detection**: Implemented automatic detection of the current Git branch during build and start processes.
+- **Version Badge Enhancements**: The version badge now displays the active branch name when running on non-release branches (e.g., feature branches), with a distinct amber styling and informative tooltips.
+- **Save Button Feedback**: Added visual feedback to the card editor save button, including a loading spinner during the save process and a success checkmark upon completion.
+- **Assets**: Added `Swiish_Logo_DarkBg.svg` graphic for use in documentation and dark-themed environments.
+
+### Changed
+- **Build Process**: Integrated `capture-git-info` script into `prestart` and `prebuild` hooks to ensure version information is always up-to-date.
+- **Docker Optimization**: Updated Dockerfile to include Git for branch detection and configured it to handle "dubious ownership" issues in containerized environments.
+- **Editor Performance**: Refactored sortable link components in the editor for better performance and cleaner code structure.
+- **User Experience**: Added a minimum delay to the save operation to ensure visual feedback is visible to the user even on fast connections.
+- **Documentation**: Comprehensive README.md rewrite, significantly shortening the content while retaining all essential information and adding project badges and logo.
+
+### Technical
+- New `scripts/capture-git-info.js` utility for build-time metadata extraction.
+- Improved Docker build stage to properly handle Git metadata while keeping the final image lean.
+
 ## [0.3.1] - 2026-01-07
 
 ### Security
