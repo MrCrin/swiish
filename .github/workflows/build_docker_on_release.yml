@@ -37,7 +37,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            mrcrin/swiish
+            crin/swiish
             ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
