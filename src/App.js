@@ -614,7 +614,11 @@ export default function App() {
   const [isSuccessSetup, setIsSuccessSetup] = useState(false);
   const [isSuccessCreateUser, setIsSuccessCreateUser] = useState(false);
   const [isSuccessInvite, setIsSuccessInvite] = useState(false);
-  
+
+  // Demo mode state management
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoResetInterval, setDemoResetInterval] = useState(60);
+
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('darkMode');
@@ -660,6 +664,21 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  // Check for demo mode on app load
+  useEffect(() => {
+    fetch(`${API_ENDPOINT}/demo/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.demoMode) {
+          setIsDemoMode(true);
+          setDemoResetInterval(data.resetInterval || 60);
+        }
+      })
+      .catch(err => {
+        // Silently fail - demo endpoint may not exist if demo mode is off
+      });
+  }, []);
+
   const toggleDarkMode = () => {
     const currentDark = document.documentElement.classList.contains('dark');
     const newValue = !currentDark;
@@ -682,6 +701,25 @@ export default function App() {
         void sampleEl.offsetHeight;
       }
     }, 100);
+  };
+
+  // Demo Mode Banner Component
+  const DemoModeBanner = () => {
+    if (!isDemoMode) return null;
+
+    return (
+      <div className="fixed top-0 left-0 right-0 z-50 bg-amber-100 dark:bg-amber-900 border-b-2 border-amber-400 dark:border-amber-700 px-4 py-3 text-center">
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-2xl">🚀</span>
+          <span className="font-semibold text-amber-900 dark:text-amber-100">
+            Demo Mode - Demon Straight Co.
+          </span>
+          <span className="text-sm text-amber-700 dark:text-amber-300">
+            • Making things perfectly straight since 1994 • All changes reset every {demoResetInterval} minutes
+          </span>
+        </div>
+      </div>
+    );
   };
 
   // Helper functions to show modals
@@ -874,9 +912,39 @@ const [settings, setSettings] = useState({
         }
       });
     } else if (path === '/admin' || path === '/' || path === '/people') {
-      // Always check setup status first, regardless of authentication
+      // Check demo mode status first (will be known from setup/status response)
       fetchCsrfToken();
       checkSetupStatus().then((status) => {
+        // Check if demo mode is active (from status response or isDemoMode state)
+        const demoModeActive = status?.demoMode || isDemoMode;
+
+        if (demoModeActive) {
+          // Demo mode: skip setup, go directly to auth check
+          if (path === '/' || path === '/admin') {
+            // Redirect root/admin to /people (explicit redirect)
+            navigate('/people');
+            return; // Let next effect run handle /people
+          }
+          // Set view to loading while checking auth
+          setView('loading');
+          checkAuth().then((authResult) => {
+            if (authResult.isAuthenticated) {
+              // Demo mode: always show dashboard for demo user (owner role)
+              setView('admin-dashboard');
+              document.title = "Admin Dashboard";
+            } else {
+              // This shouldn't happen in demo mode, but fallback to login just in case
+              navigate('/login');
+            }
+          }).catch((e) => {
+            console.error('Auth check failed:', e);
+            navigate('/login');
+          });
+          return;
+        }
+
+        // Normal mode: continue with regular auth flow
+        // (status already checked above, setupComplete must be true to get here)
         if (status === null) {
           // If check failed (server not running, network error, etc.), default to setup wizard
           navigate('/setup');
@@ -2752,9 +2820,12 @@ const [settings, setSettings] = useState({
   );
 
   return (
-    <Routes>
-      {/* Admin routes - must come before public routes to prevent matching */}
-      <Route path="/login" element={renderAdminViews()} />
+    <>
+      <DemoModeBanner />
+      <div className={isDemoMode ? "pt-20" : ""}>
+        <Routes>
+        {/* Admin routes - must come before public routes to prevent matching */}
+        <Route path="/login" element={renderAdminViews()} />
       <Route path="/people/edit/:slug" element={renderAdminViews()} />
       <Route path="/people" element={renderAdminViews()} />
       <Route path="/settings" element={renderAdminViews()} />
@@ -2793,9 +2864,11 @@ const [settings, setSettings] = useState({
           fetchPublicCard={fetchPublicCard}
         />
       } />
-      {/* Catch-all for other routes */}
-      <Route path="*" element={renderAdminViews()} />
-    </Routes>
+        {/* Catch-all for other routes */}
+        <Route path="*" element={renderAdminViews()} />
+      </Routes>
+      </div>
+    </>
   );
 }
 
