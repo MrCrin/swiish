@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-01-21
+
+### Added
+- **Docker Publishing**: Added GitHub Actions workflow for automated Docker image building and publishing to Docker Hub
+- **Multi-Platform Docker Builds**: Added support for building Docker images for multiple architectures (AMD64 and ARM64)
+- **Docker Hub Integration**: Enhanced Docker image tagging with version numbers and latest tags, plus automated Docker Hub description updates
+
+### Technical
+- GitHub Actions workflow configured for release triggers and manual dispatch
+- QEMU and Docker Buildx setup for cross-platform builds
+- Docker login using GitHub secrets for secure publishing
+
 ## [0.4.1] - 2026-01-20
 
 ### Performance

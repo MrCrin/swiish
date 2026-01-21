@@ -1,6 +1,6 @@
 services:
   swiish:
-    build: .
+    image: ghcr.io/MrCrin/swiish:latest
     container_name: swiish
     restart: unless-stopped
     ports:

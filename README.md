@@ -4,10 +4,10 @@
   <img src="https://raw.githubusercontent.com/MrCrin/swiish/master/public/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish Logo" width="200">
 </p></br>
 
-[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/MrCrin/swiish/releases)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue.svg)](https://github.com/MrCrin/swiish/releases)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Docker Image](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml/badge.svg)](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml)
 
 **Open-source digital business card platform with QR codes and PWA support**
 
@@ -48,26 +48,7 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 
 #### Option 1: Docker Deployment (Recommended)
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/MrCrin/swiish.git
-   cd swiish
-   ```
-
-2. Set up environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your values
-   ```
-
-3. Start the application:
-   ```bash
-   docker-compose up -d
-   ```
-
-4. Access the application:
-   - Main app: `http://localhost:8095`
-   - Admin dashboard: `http://localhost:8095/admin`
+See [DOCKER.md](DOCKER.md) for complete Docker setup instructions.
 
 #### Option 2: Manual Installation (For Development)
 
