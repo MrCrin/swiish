@@ -22,7 +22,7 @@ The easiest way to run Swiish is with Docker Compose.
 ```yaml
 services:
   swiish:
-    image: crin/swiish:latest
+    image: ghcr.io/MrCrin/swiish:latest
     container_name: swiish
     restart: unless-stopped
     ports:
