@@ -48,26 +48,7 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 
 #### Option 1: Docker Deployment (Recommended)
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/MrCrin/swiish.git
-   cd swiish
-   ```
-
-2. Set up environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your values
-   ```
-
-3. Start the application:
-   ```bash
-   docker-compose up -d
-   ```
-
-4. Access the application:
-   - Main app: `http://localhost:8095`
-   - Admin dashboard: `http://localhost:8095/admin`
+See [DOCKER.md](DOCKER.md) for complete Docker setup instructions.
 
 #### Option 2: Manual Installation (For Development)
 
