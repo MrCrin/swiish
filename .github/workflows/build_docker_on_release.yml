@@ -6,7 +6,6 @@ on:
   push:
     branches: 
       - "master"
-      - "feature/docker-publish"
   workflow_dispatch: # Allows manual trigger
 
 jobs:
