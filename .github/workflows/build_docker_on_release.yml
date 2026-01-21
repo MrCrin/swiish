@@ -1,12 +1,13 @@
 name: Publish Docker Image
 
 on:
-  workflow_dispatch:
   release:
     types: [published]
   push:
-    branches:
-      - 'feature/docker-publish'
+    branches: 
+      - "master"
+      - "feature/docker-publish"
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
   push_to_registries:
@@ -21,7 +22,7 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -46,9 +47,19 @@ jobs:
             crin/swiish
             ghcr.io/${{ github.repository }}
           tags: |
+            # Tag logic:
+            # 1. Semver tags (v1.2.3, v1.2, v1) only on Release event
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            
+            # 2. 'latest' tag only on stable Releases (not pre-releases)
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && !github.event.release.prerelease }}
+            
+            # 3. 'edge' tag on every push to main/master branch
+            type=raw,value=edge,enable=${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+            
+            # 4. Branch name tag (e.g. 'feature-docker') for manual builds or feature branches
+            type=ref,event=branch,enable=${{ github.event_name != 'release' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -58,3 +69,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Update Docker Hub Description
+        if: github.event_name == 'release' # Only update docs on release
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+          repository: crin/swiish
+          readme-filepath: ./DOCKER.md
