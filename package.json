@@ -1,6 +1,6 @@
 {
   "name": "swiish",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Open-source digital business card platform with QR codes and PWA support",
   "private": false,
   "repository": {
