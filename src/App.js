@@ -614,7 +614,11 @@ export default function App() {
   const [isSuccessSetup, setIsSuccessSetup] = useState(false);
   const [isSuccessCreateUser, setIsSuccessCreateUser] = useState(false);
   const [isSuccessInvite, setIsSuccessInvite] = useState(false);
-  
+
+  // Demo mode state management
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoResetInterval, setDemoResetInterval] = useState(60);
+
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('darkMode');
@@ -660,6 +664,21 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  // Check for demo mode on app load
+  useEffect(() => {
+    fetch(`${API_ENDPOINT}/demo/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.demoMode) {
+          setIsDemoMode(true);
+          setDemoResetInterval(data.resetInterval || 60);
+        }
+      })
+      .catch(err => {
+        // Silently fail - demo endpoint may not exist if demo mode is off
+      });
+  }, []);
+
   const toggleDarkMode = () => {
     const currentDark = document.documentElement.classList.contains('dark');
     const newValue = !currentDark;
@@ -682,6 +701,25 @@ export default function App() {
         void sampleEl.offsetHeight;
       }
     }, 100);
+  };
+
+  // Demo Mode Banner Component
+  const DemoModeBanner = () => {
+    if (!isDemoMode) return null;
+
+    return (
+      <div className="sticky top-0 left-0 right-0 z-50 bg-amber-100 dark:bg-amber-900 border-b-2 border-amber-400 dark:border-amber-700 px-4 py-3 text-center">
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-2xl">🛠️</span>
+          <span className="font-semibold text-amber-900 dark:text-amber-100">
+            Demo Mode
+          </span>
+          <span className="text-sm text-amber-700 dark:text-amber-300">
+            All changes reset every {demoResetInterval} minutes
+          </span>
+        </div>
+      </div>
+    );
   };
 
   // Helper functions to show modals
@@ -874,9 +912,39 @@ const [settings, setSettings] = useState({
         }
       });
     } else if (path === '/admin' || path === '/' || path === '/people') {
-      // Always check setup status first, regardless of authentication
+      // Check demo mode status first (will be known from setup/status response)
       fetchCsrfToken();
       checkSetupStatus().then((status) => {
+        // Check if demo mode is active (from status response or isDemoMode state)
+        const demoModeActive = status?.demoMode || isDemoMode;
+
+        if (demoModeActive) {
+          // Demo mode: skip setup, go directly to auth check
+          if (path === '/' || path === '/admin') {
+            // Redirect root/admin to /people (explicit redirect)
+            navigate('/people');
+            return; // Let next effect run handle /people
+          }
+          // Set view to loading while checking auth
+          setView('loading');
+          checkAuth().then((authResult) => {
+            if (authResult.isAuthenticated) {
+              // Demo mode: always show dashboard for demo user (owner role)
+              setView('admin-dashboard');
+              document.title = "Admin Dashboard";
+            } else {
+              // This shouldn't happen in demo mode, but fallback to login just in case
+              navigate('/login');
+            }
+          }).catch((e) => {
+            console.error('Auth check failed:', e);
+            navigate('/login');
+          });
+          return;
+        }
+
+        // Normal mode: continue with regular auth flow
+        // (status already checked above, setupComplete must be true to get here)
         if (status === null) {
           // If check failed (server not running, network error, etc.), default to setup wizard
           navigate('/setup');
@@ -1630,6 +1698,7 @@ const [settings, setSettings] = useState({
   if (view === 'loading') {
     return (
       <>
+        <DemoModeBanner />
         <div className="h-screen flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark bg-main dark:bg-main-dark bg-main-texture">Loading...</div>
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
@@ -1639,6 +1708,7 @@ const [settings, setSettings] = useState({
   if (view === '404') {
     return (
       <>
+        <DemoModeBanner />
         <div className="h-screen flex flex-col items-center justify-center bg-main dark:bg-main-dark bg-main-texture">
           <h1 className="text-4xl font-bold text-text-primary dark:text-text-primary-dark mb-2">404</h1>
           <p className="text-text-muted dark:text-text-muted-dark">Card not found.</p>
@@ -1651,6 +1721,7 @@ const [settings, setSettings] = useState({
   if (view === 'setup-wizard') {
     return (
       <>
+        <DemoModeBanner />
         <div className="min-h-screen bg-surface dark:bg-main-dark flex items-center justify-center p-4">
           <div className="bg-card dark:bg-card-dark max-w-md w-full rounded-page shadow-xl p-8">
             <div className="text-center mb-8">
@@ -1720,6 +1791,7 @@ const [settings, setSettings] = useState({
   if (view === 'admin-login') {
     return (
       <>
+        <DemoModeBanner />
         <div className="min-h-screen bg-surface dark:bg-main-dark flex items-center justify-center p-4">
           <div className="bg-card dark:bg-card-dark max-w-sm w-full rounded-page shadow-xl p-8">
             <div className="text-center mb-8">
@@ -1748,6 +1820,7 @@ const [settings, setSettings] = useState({
   if (view === 'admin-dashboard') {
     return (
       <>
+        <DemoModeBanner />
         <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture p-6 md:p-12 flex flex-col">
         <div className="max-w-6xl mx-auto flex-1 w-full">
           {/* UPDATED HEADER: flex-wrap + gap adjustments for mobile */}
@@ -2104,6 +2177,7 @@ const [settings, setSettings] = useState({
   if (view === 'member-empty') {
     return (
       <>
+        <DemoModeBanner />
         <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture flex items-center justify-center p-6">
           <div className="bg-card dark:bg-card-dark rounded-card shadow-lg max-w-md w-full p-8 text-center">
             <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2147,20 +2221,23 @@ const [settings, setSettings] = useState({
   if (view === 'admin-editor') {
     return (
       <>
-        <EditorView 
-          data={data} 
-          setData={setData} 
-          onBack={() => { navigate('/people'); fetchCardList(); }} 
-          onSave={handleSave}
-          slug={currentSlug}
-          settings={settings}
-          csrfToken={csrfToken}
-          showAlert={showAlert}
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
-          isSaving={isSaving}
-          isSuccess={isSuccess}
-        />
+        <DemoModeBanner />
+        <div>
+          <EditorView 
+            data={data} 
+            setData={setData} 
+            onBack={() => { navigate('/people'); fetchCardList(); }} 
+            onSave={handleSave}
+            slug={currentSlug}
+            settings={settings}
+            csrfToken={csrfToken}
+            showAlert={showAlert}
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+            isSaving={isSaving}
+            isSuccess={isSuccess}
+          />
+        </div>
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
     );
@@ -2169,18 +2246,21 @@ const [settings, setSettings] = useState({
   if (view === 'admin-settings') {
     return (
       <>
-        <SettingsView
-          settings={settings}
-          setSettings={setSettings}
-          apiCall={apiCall}
-          onBack={() => { navigate('/people'); fetchCardList(); }}
-          onSave={async () => {
-            await fetchSettings();
-            fetchCardList();
-          }}
-          showAlert={showAlert}
-          showConfirm={showConfirm}
-        />
+        <DemoModeBanner />
+        <div>
+          <SettingsView
+            settings={settings}
+            setSettings={setSettings}
+            apiCall={apiCall}
+            onBack={() => { navigate('/people'); fetchCardList(); }}
+            onSave={async () => {
+              await fetchSettings();
+              fetchCardList();
+            }}
+            showAlert={showAlert}
+            showConfirm={showConfirm}
+          />
+        </div>
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
     );
@@ -2189,13 +2269,16 @@ const [settings, setSettings] = useState({
   if (view === 'user-management') {
     return (
       <>
-        <UserManagementView
-          apiCall={apiCall}
-          userRole={userRole}
-          onBack={() => { navigate('/people'); fetchCardList(); }}
-          showAlert={showAlert}
-          showConfirm={showConfirm}
-        />
+        <DemoModeBanner />
+        <div>
+          <UserManagementView
+            apiCall={apiCall}
+            userRole={userRole}
+            onBack={() => { navigate('/people'); fetchCardList(); }}
+            showAlert={showAlert}
+            showConfirm={showConfirm}
+          />
+        </div>
         <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
       </>
     );
@@ -2203,9 +2286,12 @@ const [settings, setSettings] = useState({
 
   if (view === 'public-card' && isPublicLoading) {
     return (
-      <div className="min-h-screen bg-card dark:bg-main-dark flex items-center justify-center">
-        <div className="text-text-secondary dark:text-text-secondary-dark text-sm">Loading…</div>
-      </div>
+      <>
+        <DemoModeBanner />
+        <div className="min-h-screen bg-card dark:bg-main-dark flex items-center justify-center">
+          <div className="text-text-secondary dark:text-text-secondary-dark text-sm">Loading…</div>
+        </div>
+      </>
     );
   }
 
@@ -2752,9 +2838,12 @@ const [settings, setSettings] = useState({
   );
 
   return (
-    <Routes>
-      {/* Admin routes - must come before public routes to prevent matching */}
-      <Route path="/login" element={renderAdminViews()} />
+    <>
+      <DemoModeBanner />
+      <div>
+        <Routes>
+        {/* Admin routes - must come before public routes to prevent matching */}
+        <Route path="/login" element={renderAdminViews()} />
       <Route path="/people/edit/:slug" element={renderAdminViews()} />
       <Route path="/people" element={renderAdminViews()} />
       <Route path="/settings" element={renderAdminViews()} />
@@ -2793,9 +2882,11 @@ const [settings, setSettings] = useState({
           fetchPublicCard={fetchPublicCard}
         />
       } />
-      {/* Catch-all for other routes */}
-      <Route path="*" element={renderAdminViews()} />
-    </Routes>
+        {/* Catch-all for other routes */}
+        <Route path="*" element={renderAdminViews()} />
+      </Routes>
+      </div>
+    </>
   );
 }
 

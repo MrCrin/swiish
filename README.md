@@ -96,6 +96,20 @@ All configuration is done via environment variables. Copy `.env.example` to `.en
 
 See `.env.example` for all available options and their descriptions.
 
+### Demo Mode (Experimental)
+
+Demo mode allows visitors to explore Swiish without requiring authentication or setup. This is useful for showcasing the platform on dedicated demo instances.
+
+#### Enabling Demo Mode
+
+1. Set the `DEMO_MODE` environment variable to `true`
+2. Restart the server
+3. The app will automatically:
+   - Seed the database with demo company "Demon Straight" (a fictional company that makes really straight things)
+   - Create 6 demo employees with different card configurations
+   - Skip the login flow and auto-authenticate visitors
+   - Reset all data every hour to maintain a clean demo state
+
 ## Usage
 
 ### Creating Your First Card
