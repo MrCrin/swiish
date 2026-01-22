@@ -37,6 +37,17 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 📱 **Responsive design** - Works beautifully on desktop, tablet, and mobile
 - 🔐 **Admin dashboard** - Manage all your cards, users, and organization settings from a central dashboard
 
+## Demo
+Have a look at a working demo:
+- How your cards can look
+  - https://swiish-demo.up.railway.app/LINES02
+  - https://swiish-demo.up.railway.app/LEVEL03
+  - https://swiish-demo.up.railway.app/PLUMB05
+- How the admin dashboard looks (demo will bypass login)
+  - https://swiish-demo.up.railway.app/
+
+**Note**: The demo is reset hourly and doesn't include the setup process that runs when you first install Swiish.
+
 ## Quick Start
 
 ### Prerequisites
