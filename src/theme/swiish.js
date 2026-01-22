@@ -202,17 +202,17 @@ module.exports = {
     
     // Confirm/Neutral button
     confirm: {
-      light: tailwindColors.zinc[900],   // Confirm button (light theme)
+      light: tailwindColors.stone[400],   // Confirm button (light theme)
       dark: tailwindColors.zinc[400],    // Confirm button (dark theme)
     },
     
     confirmHover: {
-      light: tailwindColors.zinc[800],   // Confirm hover (light theme)
+      light: tailwindColors.stone[500],   // Confirm hover (light theme)
       dark: tailwindColors.zinc[200],    // Confirm hover (dark theme)
     },
     
     confirmText: {
-      light: tailwindColors.white,        // Confirm text (light theme)
+      light: tailwindColors.zinc[900],        // Confirm text (light theme)
       dark: tailwindColors.zinc[900],    // Confirm text (dark theme)
     },
     
