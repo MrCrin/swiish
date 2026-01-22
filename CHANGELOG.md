@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-22
+
+### Added
+- **Demo Mode**: Enable a demo experience with seeded data, automatic hourly resets, and an always-visible banner across all views
+
+### Changed
+- **Admin UI Refinements**: Updated spacing, border radius, theme colors, margins, and restored interface access controls for a more consistent admin experience
+- **Admin View Rendering**: Consolidated admin view rendering logic into a dedicated function for better maintainability
+
 ## [0.4.2] - 2026-01-21
 
 ### Added

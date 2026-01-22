@@ -615,6 +615,10 @@ export default function App() {
   const [isSuccessCreateUser, setIsSuccessCreateUser] = useState(false);
   const [isSuccessInvite, setIsSuccessInvite] = useState(false);
   
+  // Demo mode state management
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [demoResetInterval, setDemoResetInterval] = useState(60);
+  
   // Dark mode state management
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('darkMode');
@@ -660,6 +664,21 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  // Check for demo mode on app load
+  useEffect(() => {
+    fetch(`${API_ENDPOINT}/demo/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.demoMode) {
+          setIsDemoMode(true);
+          setDemoResetInterval(data.resetInterval || 60);
+        }
+      })
+      .catch(err => {
+        // Silently fail - demo endpoint may not exist if demo mode is off
+      });
+  }, []);
+
   const toggleDarkMode = () => {
     const currentDark = document.documentElement.classList.contains('dark');
     const newValue = !currentDark;
@@ -682,6 +701,25 @@ export default function App() {
         void sampleEl.offsetHeight;
       }
     }, 100);
+  };
+
+  // Demo Mode Banner Component
+  const DemoModeBanner = () => {
+    if (!isDemoMode) return null;
+
+    return (
+      <div className="sticky top-0 left-0 right-0 z-50 bg-amber-100 dark:bg-amber-900 border-b-2 border-amber-400 dark:border-amber-700 px-4 py-3 text-center">
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-2xl">🛠️</span>
+          <span className="font-semibold text-amber-900 dark:text-amber-100">
+            Demo Mode
+          </span>
+          <span className="text-sm text-amber-700 dark:text-amber-300">
+            All changes reset every {demoResetInterval} minutes
+          </span>
+        </div>
+      </div>
+    );
   };
 
   // Helper functions to show modals
@@ -874,9 +912,39 @@ const [settings, setSettings] = useState({
         }
       });
     } else if (path === '/admin' || path === '/' || path === '/people') {
-      // Always check setup status first, regardless of authentication
+      // Check demo mode status first (will be known from setup/status response)
       fetchCsrfToken();
       checkSetupStatus().then((status) => {
+        // Check if demo mode is active (from status response or isDemoMode state)
+        const demoModeActive = status?.demoMode || isDemoMode;
+
+        if (demoModeActive) {
+          // Demo mode: skip setup, go directly to auth check
+          if (path === '/' || path === '/admin') {
+            // Redirect root/admin to /people (explicit redirect)
+            navigate('/people');
+            return; // Let next effect run handle /people
+          }
+          // Set view to loading while checking auth
+          setView('loading');
+          checkAuth().then((authResult) => {
+            if (authResult.isAuthenticated) {
+              // Demo mode: always show dashboard for demo user (owner role)
+              setView('admin-dashboard');
+              document.title = "Admin Dashboard";
+            } else {
+              // This shouldn't happen in demo mode, but fallback to login just in case
+              navigate('/login');
+            }
+          }).catch((e) => {
+            console.error('Auth check failed:', e);
+            navigate('/login');
+          });
+          return;
+        }
+
+        // Normal mode: continue with regular auth flow
+        // (status already checked above, setupComplete must be true to get here)
         if (status === null) {
           // If check failed (server not running, network error, etc.), default to setup wizard
           navigate('/setup');
@@ -1627,590 +1695,9 @@ const [settings, setSettings] = useState({
     await performSave();
   };
 
-  if (view === 'loading') {
-    return (
-      <>
-        <div className="h-screen flex items-center justify-center text-text-muted-subtle dark:text-text-muted-dark bg-main dark:bg-main-dark bg-main-texture">Loading...</div>
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-  
-  if (view === '404') {
-    return (
-      <>
-        <div className="h-screen flex flex-col items-center justify-center bg-main dark:bg-main-dark bg-main-texture">
-          <h1 className="text-4xl font-bold text-text-primary dark:text-text-primary-dark mb-2">404</h1>
-          <p className="text-text-muted dark:text-text-muted-dark">Card not found.</p>
-        </div>
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'setup-wizard') {
-    return (
-      <>
-        <div className="min-h-screen bg-surface dark:bg-main-dark flex items-center justify-center p-4">
-          <div className="bg-card dark:bg-card-dark max-w-md w-full rounded-page shadow-xl p-8">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Settings className="w-8 h-8" /></div>
-              <h1 className="text-2xl font-bold text-text-primary dark:text-text-primary-dark">Initial Setup</h1>
-              <p className="text-sm text-text-muted dark:text-text-muted-dark mt-2">Configure your organisation and create the first admin user</p>
-            </div>
-            <form onSubmit={handleSetup} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2">Organisation Name</label>
-                <input 
-                  type="text" 
-                  value={setupData.organisationName} 
-                  onChange={e => setSetupData({ ...setupData, organisationName: e.target.value })} 
-                  placeholder="My Organization" 
-                  className="w-full px-5 py-3 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark" 
-                  required 
-                  autoFocus 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2">Admin Email</label>
-                <input 
-                  type="email" 
-                  value={setupData.adminEmail} 
-                  onChange={e => setSetupData({ ...setupData, adminEmail: e.target.value })} 
-                  placeholder="admin@example.com" 
-                  className="w-full px-5 py-3 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark" 
-                  required 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2">Admin Password</label>
-                <input 
-                  type="password" 
-                  value={setupData.adminPassword} 
-                  onChange={e => setSetupData({ ...setupData, adminPassword: e.target.value })} 
-                  placeholder="Minimum 8 characters" 
-                  className="w-full px-5 py-3 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark" 
-                  required 
-                  minLength={8}
-                />
-                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">Password must be at least 8 characters long</p>
-              </div>
-              {error && <div className="flex items-center gap-2 text-error-text dark:text-error-text-dark text-sm">{error}</div>}
-              <button 
-                type="submit" 
-                disabled={isSettingUp}
-                className="w-full py-3.5 rounded-full bg-action dark:bg-action-dark text-white font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSettingUp ? 'Setting up...' : 'Complete Setup'}
-              </button>
-            </form>
-            <div className="text-center mt-auto pt-8 pb-0 group relative z-10" style={{ boxSizing: 'content-box' }}>
-              <div className="flex justify-center">
-                <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
-                <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'admin-login') {
-    return (
-      <>
-        <div className="min-h-screen bg-surface dark:bg-main-dark flex items-center justify-center p-4">
-          <div className="bg-card dark:bg-card-dark max-w-sm w-full rounded-page shadow-xl p-8">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 dark:text-indigo-400"><Lock className="w-8 h-8" /></div>
-              <h1 className="text-2xl font-bold text-text-primary dark:text-text-primary-dark">Login</h1>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full px-5 py-3 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark" autoFocus />
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="w-full px-5 py-3 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark" />
-              {error && <div className="flex items-center gap-2 text-error-text dark:text-error-text-dark text-sm">{error}</div>}
-              <button type="submit" className="w-full py-3.5 rounded-full bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark transition-colors">Login</button>
-            </form>
-            <div className="text-center mt-8 group relative z-10">
-              <div className="flex justify-center">
-                <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
-                <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'admin-dashboard') {
-    return (
-      <>
-        <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture p-6 md:p-12 flex flex-col">
-        <div className="max-w-6xl mx-auto flex-1 w-full">
-          {/* UPDATED HEADER: flex-wrap + gap adjustments for mobile */}
-          <div className="flex flex-wrap justify-between items-center mb-8 gap-4 relative z-10">
-             <div>
-               <h1 className="text-2xl md:text-3xl font-bold text-text-primary dark:text-text-primary-dark">{settings?.default_organisation || 'People'}</h1>
-               <p className="text-sm md:text-base text-text-muted dark:text-text-muted-dark">Manage your people</p>
-             </div>
-             <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
-               <button onClick={toggleDarkMode} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
-                 {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-               </button>
-               <button onClick={handleLogout} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-muted dark:text-text-muted-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap text-sm md:text-base">Logout</button>
-               {userRole === 'owner' && (
-                 <button onClick={() => navigate('/settings')} className="px-3 py-2 md:px-4 md:py-3 rounded-full font-medium text-text-secondary dark:text-text-secondary-dark bg-card dark:bg-card-dark border border-border dark:border-border-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors whitespace-nowrap flex items-center gap-2 text-sm md:text-base">
-                   <Settings className="w-4 h-4" /> <span className="hidden sm:inline">Organisation</span><span className="sm:hidden">Org</span>
-                 </button>
-               )}
-               <button onClick={handleCreateNew} className="bg-action dark:bg-action-dark text-white px-4 py-2 md:px-6 md:py-3 rounded-full font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark transition-all whitespace-nowrap text-sm md:text-base">
-                 <Plus className="w-4 h-4 md:w-5 md:h-5" /> New Person
-               </button>
-             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {groupCardsByUser(cardList).map(user => {
-              // Filter out entries without slugs (these represent users without cards)
-              const userCards = user.cards.filter(c => c.slug);
-              const userKey = user.userId || user.userEmail || 'unknown';
-              
-              return (
-                <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-6">
-                {/* User Info Box (top) - only shown for owners */}
-                  {userRole === 'owner' && user.userEmail && (
-                  <div className="w-full mb-4">
-                    <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 text-xs border border-border dark:border-border-dark">
-                        <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-badge text-xs font-medium ${
-                            user.userRole === 'owner' 
-                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' 
-                            : 'bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark'
-                        }`}>
-                            {user.userRole === 'owner' ? 'Owner' : 'Member'}
-                        </span>
-                          {user.userCreatedAt && (
-                          <span className="text-text-muted dark:text-text-muted-dark text-[10px]">
-                              {new Date(user.userCreatedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                        {user.userId && user.userId !== currentUserId && (
-                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border dark:border-border-dark">
-                            {editingUserId === user.userId ? (
-                            <div className="flex items-center gap-2 w-full">
-                              <select
-                                  value={user.userRole}
-                                  onChange={(e) => handleUpdateRole(user.userId, e.target.value)}
-                                className="flex-1 px-2 py-1 text-[10px] rounded border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark"
-                              >
-                                <option value="member">Member</option>
-                                <option value="owner">Owner</option>
-                              </select>
-                              <button
-                                onClick={() => setEditingUserId(null)}
-                                className="px-2 py-1 text-[10px] bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded hover:bg-surface dark:hover:bg-surface-dark"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <button
-                                  onClick={() => setEditingUserId(user.userId)}
-                                className="flex-1 px-2 py-1 text-[10px] bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded hover:bg-surface dark:hover:bg-surface-dark flex items-center justify-center gap-1"
-                              >
-                                <Edit3 className="w-3 h-3" /> Role
-                              </button>
-                              <button
-                                  onClick={() => handleRemoveUser(user.userId, user.userEmail)}
-                                className="flex-1 px-2 py-1 text-[10px] bg-error-bg dark:bg-error-bg-dark text-error dark:text-error-text-dark rounded hover:bg-error-bg dark:hover:bg-error-bg-dark flex items-center justify-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" /> Remove
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                        {user.userId === currentUserId && (
-                        <div className="text-[10px] text-text-muted dark:text-text-muted-dark italic mt-2 pt-2 border-t border-border dark:border-border-dark">
-                          Cannot modify yourself
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                  {/* Cards for this user - stacked vertically */}
-                  <div className="w-full mt-4 space-y-4">
-                    {userCards.length > 0 ? (
-                      <>
-                        {userCards.map(card => (
-                          <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                            <div className="w-full h-full flex flex-col">
-                              <div className="flex-1 flex flex-row items-start gap-3 mb-3 relative">
-                                <div className="w-16 h-16 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
-                                  {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-3 text-text-muted-subtle dark:text-text-muted-dark" />}
-                                </div>
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete(card.slug); }} className="absolute top-0 right-0 p-2 text-text-muted-subtle dark:text-text-muted-dark hover:text-error-text dark:hover:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark rounded-full transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                                <div className="flex-1 flex flex-col text-left min-w-0">
-                                  <h3 className="font-bold text-text-primary dark:text-text-primary-dark text-base mb-0.5 truncate">{card.name}</h3>
-                                  {card.title && <p className="text-text-muted dark:text-text-muted-dark text-xs mb-1 truncate">{card.title}</p>}
-                                  <div className="space-y-0.5">
-                                    {card.shortCode && (
-                                      <div className="text-[10px] text-text-muted-subtle dark:text-text-muted-dark font-mono truncate" title="Short Code URL">
-                                        <span className="text-text-muted-subtle dark:text-text-muted-dark">Short:</span> /{card.shortCode}
-                      </div>
-                                    )}
-                                    {card.orgSlug && card.slug ? (
-                                      <div className="text-[10px] text-text-muted-subtle dark:text-text-muted-dark font-mono truncate" title="Org-scoped URL">
-                                        <span className="text-text-muted-subtle dark:text-text-muted-dark">URL:</span> /{card.orgSlug}/{card.slug}
-                                      </div>
-                                    ) : card.slug ? (
-                                      <div className="text-[10px] text-text-muted-subtle dark:text-text-muted-dark font-mono truncate" title="Legacy URL">
-                                        <span className="text-text-muted-subtle dark:text-text-muted-dark">URL:</span> /{card.slug}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-center gap-2 w-full mt-auto">
-                                <a 
-                                  href={card.shortCode ? `/${card.shortCode}` : (card.orgSlug && card.slug ? `/${card.orgSlug}/${card.slug}` : `/${card.slug}`)} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
-                                  className="flex-1 py-2 text-xs font-medium text-confirm-text dark:text-confirm-text-dark bg-confirm dark:bg-confirm-dark rounded-button hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark flex items-center justify-center gap-1"
-                                >
-                                  <ExternalLink className="w-3 h-3"/> View
-                                </a>
-                        <button onClick={() => handleEdit(card.slug)} className="flex-1 py-2 text-xs font-medium text-confirm-text dark:text-confirm-text-dark bg-confirm dark:bg-confirm-dark rounded-button hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark flex items-center justify-center gap-1"><Edit3 className="w-3 h-3"/> Edit</button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {/* Create Card button at bottom of card list */}
-                        <div className="bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark p-4 flex items-center justify-center">
-                          <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-2 text-sm font-medium text-confirm-text dark:text-confirm-text-dark bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
-                      </div>
-                    </>
-                  ) : (
-                      /* No cards - show Create Card button in place */
-                      <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                        <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
-                          <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-3 text-sm font-medium text-confirm-text dark:text-confirm-text-dark bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
-                        </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              );
-            })}
-            {cardList.length === 0 && (
-               <div className="col-span-full py-20 text-center text-text-muted-subtle dark:text-text-muted-dark bg-card dark:bg-card-dark rounded-card border-thick border-dashed border-border dark:border-border-dark">
-                 No people yet. Click "New Person" to start.
-               </div>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="fixed bottom-4 right-4 z-10 text-center group">
-        <div className="flex justify-center">
-          <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
-          <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
-        </div>
-      </div>
-      <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      <Modal 
-        isOpen={createCardModal.isOpen} 
-        onClose={handleCreateCardCancel} 
-        type="info" 
-        title="Create New Card" 
-        message="Enter a user URL for the new card (e.g., 'sarah'):"
-        inputLabel="User URL"
-        inputPlaceholder="sarah"
-        inputValue={createCardModal.slug}
-        onInputChange={(value) => setCreateCardModal(prev => ({ ...prev, slug: value }))}
-        onConfirm={handleCreateCardConfirm}
-        confirmText="Create"
-        cancelText="Cancel"
-      />
-      {/* Action Selection Modal */}
-      {actionSelectionModal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-card dark:bg-card-dark rounded-card shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">What would you like to do?</h3>
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  setActionSelectionModal({ isOpen: false });
-                  setShowInviteModal(true);
-                }}
-                className="w-full px-4 py-3 bg-action dark:bg-action-dark text-white rounded-button font-medium hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"
-              >
-                <Users className="w-4 h-4" /> Invite User
-              </button>
-              <button
-                onClick={() => {
-                  setActionSelectionModal({ isOpen: false });
-                  setShowCreateUserModal(true);
-                }}
-                className="w-full px-4 py-3 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-medium hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark flex items-center justify-center gap-2"
-              >
-                <User className="w-4 h-4" /> Create User
-              </button>
-            </div>
-            <button
-              onClick={() => setActionSelectionModal({ isOpen: false })}
-              className="w-full mt-4 px-4 py-2 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {/* Invite User Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-card dark:bg-card-dark rounded-card shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">Invite User</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
-                <input
-                  type="email"
-                  value={newInvitation.email}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                  placeholder="user@example.com"
-                />
-                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">An invitation email will be sent to this address</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
-                <select
-                  value={newInvitation.role}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, role: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                >
-                  <option value="member">Member</option>
-                  <option value="owner">Owner</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowInviteModal(false);
-                  setNewInvitation({ email: '', role: 'member' });
-                }}
-                className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendInvitation}
-                disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isSavingUser ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : isSuccessInvite ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {isSavingUser ? 'Sending...' : 'Send Invitation'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Create User Modal */}
-      {showCreateUserModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-card dark:bg-card-dark rounded-card shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">Create New User</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Password</label>
-                <input
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                  placeholder="Minimum 8 characters"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                >
-                  <option value="member">Member</option>
-                  <option value="owner">Owner</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowCreateUserModal(false);
-                  setNewUser({ email: '', password: '', role: 'member' });
-                }}
-                className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateUser}
-                disabled={isSavingUser}
-                className="flex-1 px-4 py-2.5 bg-confirm dark:bg-confirm-dark text-confirm-text dark:text-confirm-text-dark rounded-button font-bold hover:bg-confirm-hover dark:hover:bg-confirm-hover-dark disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isSavingUser ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : isSuccessCreateUser ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {isSavingUser ? 'Creating...' : 'Create User'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <VersionBadge />
-      </>
-    );
-  }
-
-  if (view === 'member-empty') {
-    return (
-      <>
-        <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture flex items-center justify-center p-6">
-          <div className="bg-card dark:bg-card-dark rounded-card shadow-lg max-w-md w-full p-8 text-center">
-            <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <h2 className="text-xl font-bold text-text-primary dark:text-text-primary-dark mb-2">You don't have a card yet</h2>
-            <p className="text-text-secondary dark:text-text-muted-dark mb-6">Create your first card to get started.</p>
-            <button
-              onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: null })}
-              className="w-full px-4 py-3 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Create Card
-            </button>
-            <button
-              onClick={handleLogout}
-              className="w-full mt-3 px-4 py-2 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-        <Modal 
-          isOpen={createCardModal.isOpen} 
-          onClose={handleCreateCardCancel} 
-          type="info" 
-          title="Create New Card" 
-          message="Enter a user URL for the new card (e.g., 'sarah'):"
-          inputLabel="User URL"
-          inputPlaceholder="sarah"
-          inputValue={createCardModal.slug}
-          onInputChange={(value) => setCreateCardModal(prev => ({ ...prev, slug: value }))}
-          onConfirm={handleCreateCardConfirm}
-          confirmText="Create"
-          cancelText="Cancel"
-        />
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'admin-editor') {
-    return (
-      <>
-        <EditorView 
-          data={data} 
-          setData={setData} 
-          onBack={() => { navigate('/people'); fetchCardList(); }} 
-          onSave={handleSave}
-          slug={currentSlug}
-          settings={settings}
-          csrfToken={csrfToken}
-          showAlert={showAlert}
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
-          isSaving={isSaving}
-          isSuccess={isSuccess}
-        />
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'admin-settings') {
-    return (
-      <>
-        <SettingsView
-          settings={settings}
-          setSettings={setSettings}
-          apiCall={apiCall}
-          onBack={() => { navigate('/people'); fetchCardList(); }}
-          onSave={async () => {
-            await fetchSettings();
-            fetchCardList();
-          }}
-          showAlert={showAlert}
-          showConfirm={showConfirm}
-        />
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'user-management') {
-    return (
-      <>
-        <UserManagementView
-          apiCall={apiCall}
-          userRole={userRole}
-          onBack={() => { navigate('/people'); fetchCardList(); }}
-          showAlert={showAlert}
-          showConfirm={showConfirm}
-        />
-        <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
-      </>
-    );
-  }
-
-  if (view === 'public-card' && isPublicLoading) {
-    return (
-      <div className="min-h-screen bg-card dark:bg-main-dark flex items-center justify-center">
-        <div className="text-text-secondary dark:text-text-secondary-dark text-sm">Loading…</div>
-      </div>
-    );
-  }
-
   // Always use Routes for proper URL handling
   // Admin routes must be defined before /:slug to prevent matching
+  // All admin views are consolidated here to avoid duplication
   const renderAdminViews = () => (
     <>
       {view === 'loading' && (
@@ -2333,7 +1820,7 @@ const [settings, setSettings] = useState({
           <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture p-6 md:p-12 flex flex-col">
           <div className="max-w-6xl mx-auto flex-1 w-full">
             {/* UPDATED HEADER: flex-wrap + gap adjustments for mobile */}
-            <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
+            <div className="flex flex-wrap justify-between items-center mb-8 gap-4 relative z-10">
                <div>
                  <h1 className="text-2xl md:text-3xl font-bold text-text-primary dark:text-text-primary-dark">People</h1>
                  <p className="text-sm md:text-base text-text-muted dark:text-text-muted-dark">Manage your people</p>
@@ -2365,11 +1852,11 @@ const [settings, setSettings] = useState({
                 const userKey = user.userId || user.userEmail || 'unknown';
                 
                 return (
-                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-6">
+                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px]">
                     {/* User Info Box (top) - only shown for owners */}
                     {userRole === 'owner' && user.userEmail && (
-                      <div className="w-full mb-4">
-                        <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 text-xs border border-border dark:border-border-dark">
+                      <div className="w-full mb-[15px]">
+                        <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-5 text-xs border border-border dark:border-border-dark min-h-[130px]">
                           <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
                           <div className="flex items-center justify-between mb-2">
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -2432,15 +1919,15 @@ const [settings, setSettings] = useState({
                     )}
                     
                     {/* Cards for this user - stacked vertically */}
-                    <div className="w-full mt-4 space-y-4">
+                    <div className="w-full space-y-[15px]">
                       {userCards.length > 0 ? (
                         <>
                           {userCards.map(card => (
-                            <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                            <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-badge p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
                               <div className="w-full h-full flex flex-col">
                                 <div className="flex-1 flex flex-row items-start gap-3 mb-3 relative">
-                                  <div className="w-16 h-16 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
-                                    {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-3 text-text-muted-subtle dark:text-text-muted-dark" />}
+                                  <div className="w-20 h-20 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
+                                    {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-5 text-text-muted-subtle dark:text-text-muted-dark" />}
                                   </div>
                                   <button onClick={(e) => { e.stopPropagation(); handleDelete(card.slug); }} className="absolute top-0 right-0 p-2 text-text-muted-subtle dark:text-text-muted-dark hover:text-error-text dark:hover:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark rounded-full transition-colors">
                                     <Trash2 className="w-4 h-4" />
@@ -2481,15 +1968,15 @@ const [settings, setSettings] = useState({
                             </div>
                           ))}
                           {/* Create Card button at bottom of card list */}
-                          <div className="bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark p-4 flex items-center justify-center">
-                            <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-2 text-sm font-medium text-confirm-text dark:text-confirm-text-dark bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
+                          <div className="bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-container border-thick border-dashed border-border dark:border-border-dark p-[15px] flex items-center justify-center">
+                            <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-2 text-sm font-medium text-white bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                           </div>
                         </>
                       ) : (
                         /* No cards - show Create Card button in place */
-                        <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                          <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
-                            <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-3 text-sm font-medium text-confirm-text dark:text-confirm-text-dark bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
+                        <div className="bg-surface dark:bg-surface-dark/50 rounded-badge p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                          <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-badge border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
+                            <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-3 text-sm font-medium text-white bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                           </div>
                         </div>
                       )}
@@ -2502,11 +1989,10 @@ const [settings, setSettings] = useState({
                    No people yet. Click "New Person" to start.
                  </div>
               )}
-            </div>
           </div>
           </div>
-          <div className="text-center mt-auto pt-4 pb-4 group">
-            <div className="text-[10px] text-text-secondary dark:text-text-secondary-dark opacity-25 group-hover:opacity-100 uppercase font-bold tracking-widest mb-1.5">powered by</div>
+          </div>
+          <div className="fixed bottom-4 right-4 z-10 text-center group">
             <div className="flex justify-center">
               <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
               <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
@@ -2657,6 +2143,20 @@ const [settings, setSettings] = useState({
           )}
           <VersionBadge />
           <Modal isOpen={modal.isOpen} onClose={closeModal} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} confirmText={modal.confirmText} cancelText={modal.cancelText} />
+          <Modal
+            isOpen={createCardModal.isOpen}
+            onClose={handleCreateCardCancel}
+            type="info"
+            title="Create New Card"
+            message="Enter a user URL for the new card (e.g., 'sarah'):"
+            inputLabel="User URL"
+            inputPlaceholder="sarah"
+            inputValue={createCardModal.slug}
+            onInputChange={(value) => setCreateCardModal(prev => ({ ...prev, slug: value }))}
+            onConfirm={handleCreateCardConfirm}
+            confirmText="Create"
+            cancelText="Cancel"
+          />
         </>
       )}
       {view === 'member-empty' && (
@@ -2752,50 +2252,53 @@ const [settings, setSettings] = useState({
   );
 
   return (
-    <Routes>
-      {/* Admin routes - must come before public routes to prevent matching */}
-      <Route path="/login" element={renderAdminViews()} />
-      <Route path="/people/edit/:slug" element={renderAdminViews()} />
-      <Route path="/people" element={renderAdminViews()} />
-      <Route path="/settings" element={renderAdminViews()} />
-      <Route path="/users" element={renderAdminViews()} />
-      <Route path="/cards" element={renderAdminViews()} />
-      <Route path="/" element={renderAdminViews()} />
-      {/* Public card routes - org-scoped must come before single slug */}
-      <Route path="/:orgSlug/:cardSlug" element={
-        <PublicCardRoute 
-          view={view}
-          isPublicLoading={isPublicLoading}
-          error={error}
-          data={data}
-          settings={settings}
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
-          showAlert={showAlert}
-          fetchCardByOrgAndSlug={fetchCardByOrgAndSlug}
-          fetchCardByShortCode={fetchCardByShortCode}
-          fetchPublicCard={fetchPublicCard}
-        />
-      } />
-      {/* Public card route - matches short code or legacy slug */}
-      <Route path="/:slug" element={
-        <PublicCardRoute 
-          view={view}
-          isPublicLoading={isPublicLoading}
-          error={error}
-          data={data}
-          settings={settings}
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
-          showAlert={showAlert}
-          fetchCardByOrgAndSlug={fetchCardByOrgAndSlug}
-          fetchCardByShortCode={fetchCardByShortCode}
-          fetchPublicCard={fetchPublicCard}
-        />
-      } />
-      {/* Catch-all for other routes */}
-      <Route path="*" element={renderAdminViews()} />
-    </Routes>
+    <>
+      <DemoModeBanner />
+      <Routes>
+        {/* Admin routes - must come before public routes to prevent matching */}
+        <Route path="/login" element={renderAdminViews()} />
+        <Route path="/people/edit/:slug" element={renderAdminViews()} />
+        <Route path="/people" element={renderAdminViews()} />
+        <Route path="/settings" element={renderAdminViews()} />
+        <Route path="/users" element={renderAdminViews()} />
+        <Route path="/cards" element={renderAdminViews()} />
+        <Route path="/" element={renderAdminViews()} />
+        {/* Public card routes - org-scoped must come before single slug */}
+        <Route path="/:orgSlug/:cardSlug" element={
+          <PublicCardRoute 
+            view={view}
+            isPublicLoading={isPublicLoading}
+            error={error}
+            data={data}
+            settings={settings}
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+            showAlert={showAlert}
+            fetchCardByOrgAndSlug={fetchCardByOrgAndSlug}
+            fetchCardByShortCode={fetchCardByShortCode}
+            fetchPublicCard={fetchPublicCard}
+          />
+        } />
+        {/* Public card route - matches short code or legacy slug */}
+        <Route path="/:slug" element={
+          <PublicCardRoute 
+            view={view}
+            isPublicLoading={isPublicLoading}
+            error={error}
+            data={data}
+            settings={settings}
+            darkMode={darkMode}
+            toggleDarkMode={toggleDarkMode}
+            showAlert={showAlert}
+            fetchCardByOrgAndSlug={fetchCardByOrgAndSlug}
+            fetchCardByShortCode={fetchCardByShortCode}
+            fetchPublicCard={fetchPublicCard}
+          />
+        } />
+        {/* Catch-all for other routes */}
+        <Route path="*" element={renderAdminViews()} />
+      </Routes>
+    </>
   );
 }
 

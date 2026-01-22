@@ -202,17 +202,17 @@ module.exports = {
     
     // Confirm/Neutral button
     confirm: {
-      light: tailwindColors.zinc[900],   // Confirm button (light theme)
+      light: tailwindColors.stone[400],   // Confirm button (light theme)
       dark: tailwindColors.zinc[400],    // Confirm button (dark theme)
     },
     
     confirmHover: {
-      light: tailwindColors.zinc[800],   // Confirm hover (light theme)
+      light: tailwindColors.stone[500],   // Confirm hover (light theme)
       dark: tailwindColors.zinc[200],    // Confirm hover (dark theme)
     },
     
     confirmText: {
-      light: tailwindColors.white,        // Confirm text (light theme)
+      light: tailwindColors.zinc[900],        // Confirm text (light theme)
       dark: tailwindColors.zinc[900],    // Confirm text (dark theme)
     },
     
@@ -231,7 +231,7 @@ module.exports = {
   // Used for: rounded-card, rounded-container, rounded-button, rounded-input, rounded-badge, rounded-full
   borderRadius: {
     'card': '40px',        // Cards, modals (equivalent to rounded-2xl)
-    'container': '15px',   // Simple containers, info boxes (equivalent to rounded-lg)
+    'container': '25px',   // Simple containers, info boxes (equivalent to rounded-lg)
     'page': '1.5rem',      // Setup/login pages (equivalent to rounded-3xl)
     'button': '9999px',    // Buttons (equivalent to rounded-full)
     'input': '0.75rem',    // Input fields (equivalent to rounded-xl)

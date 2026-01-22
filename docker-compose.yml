@@ -6,9 +6,8 @@ services:
     ports:
       - "8095:3000"
     environment:
-      # WARNING: These must be set in your .env file or environment
+      # WARNING: JWT_SECRET must be set in your .env file or environment
       # Never use default values in production!
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - APP_URL=${APP_URL:-http://localhost:8095}
       - NODE_ENV=${NODE_ENV:-production}
