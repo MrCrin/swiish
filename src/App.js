@@ -1989,11 +1989,10 @@ const [settings, setSettings] = useState({
                    No people yet. Click "New Person" to start.
                  </div>
               )}
-            </div>
           </div>
           </div>
-          <div className="text-center mt-auto pt-4 pb-4 group">
-            <div className="text-[10px] text-text-secondary dark:text-text-secondary-dark opacity-25 group-hover:opacity-100 uppercase font-bold tracking-widest mb-1.5">powered by</div>
+          </div>
+          <div className="fixed bottom-4 right-4 z-10 text-center group">
             <div className="flex justify-center">
               <img src="/graphics/Swiish_Logo.svg" alt="Swiish" className="h-4 w-auto dark:hidden swiish-logo" />
               <img src="/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish" className="h-4 w-auto hidden dark:block swiish-logo" />
