@@ -83,7 +83,6 @@ All configuration is done via environment variables. Copy `.env.example` to `.en
 ### Required Variables
 
 - **`JWT_SECRET`** - Secret key for JWT token signing. Generate with: `openssl rand -base64 32`
-- **`ADMIN_PASSWORD`** - Password for accessing the admin dashboard
 
 ### Optional Variables
 
@@ -101,8 +100,8 @@ See `.env.example` for all available options and their descriptions.
 
 ### Creating Your First Card
 
-1. Access the admin dashboard at `/admin`
-2. Log in with your `ADMIN_PASSWORD`
+1. Complete the initial setup wizard at `/setup` to create your organization and admin account
+2. Log in to access the admin dashboard at `/admin`
 3. Click "Create New Card"
 4. Enter a unique slug (e.g., `john-doe`)
 5. Fill in your contact information, upload images, customize the theme

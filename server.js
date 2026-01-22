@@ -58,7 +58,7 @@ function log(message, data = null) {
 app.set('trust proxy', 1);
 
 // Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'ADMIN_PASSWORD'];
+const requiredEnvVars = ['JWT_SECRET'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
   console.error(`ERROR: Missing required environment variables: ${missingEnvVars.join(', ')}`);
@@ -67,8 +67,6 @@ if (missingEnvVars.length > 0) {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@localhost';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000', 'http://localhost:8095'];
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -79,7 +77,7 @@ const SMTP_PORT = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD;
-const SMTP_FROM = process.env.SMTP_FROM || ADMIN_EMAIL;
+const SMTP_FROM = process.env.SMTP_FROM || 'noreply@localhost';
 const APP_URL = process.env.APP_URL || (() => {
   if (NODE_ENV === 'production') {
     console.error('ERROR: APP_URL must be set in production environment');
@@ -660,104 +658,11 @@ app.post('/api/login', loginLimiter, [
         return next(err);
       }
       
-      // If no user found, check if we should create default user (backward compatibility)
+      // If no user found, return error
       if (!user) {
-        // Check if any users exist
-        db.get("SELECT COUNT(*) as count FROM users", [], async (err, countRow) => {
-          if (err) {
-            return next(err);
-          }
-          
-          // If no users exist and ADMIN_PASSWORD matches, create default user
-          if (countRow.count === 0 && password === ADMIN_PASSWORD) {
-            // Check if default organisation already exists
-            db.get("SELECT id FROM organisations WHERE slug = 'default'", [], (err, existingOrg) => {
-              if (err) {
-                return next(err);
-              }
-              
-              let orgId;
-              if (existingOrg) {
-                // Organisation already exists
-                orgId = existingOrg.id;
-                createLoginUser(orgId);
-              } else {
-                // Create default organisation
-                orgId = require('crypto').randomUUID();
-                const orgName = ADMIN_EMAIL.split('@')[1] ? `Default Organisation (${ADMIN_EMAIL.split('@')[1]})` : 'Default Organisation';
-                
-                db.run(`
-                  INSERT INTO organisations (id, name, slug, subscription_tier)
-                  VALUES (?, ?, ?, ?)
-                `, [orgId, orgName, 'default', 'individual'], (err) => {
-                  if (err) {
-                    return next(err);
-                  }
-                  createLoginUser(orgId);
-                });
-              }
-              
-              function createLoginUser(orgId) {
-                // Create default admin user
-                const userId = require('crypto').randomUUID();
-                bcrypt.hash(ADMIN_PASSWORD, 10, (err, passwordHash) => {
-                  if (err) {
-                    return next(err);
-                  }
-                  
-                  db.run(`
-                    INSERT INTO users (id, email, password_hash, organisation_id, role, email_verified)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                  `, [userId, ADMIN_EMAIL, passwordHash, orgId, 'owner', 0], (err) => {
-                    if (err) {
-                      return next(err);
-                    }
-                    
-                    // Initialize default organisation settings if they don't exist
-                    db.get("SELECT COUNT(*) as count FROM organisation_settings WHERE organisation_id = ?", [orgId], (err, settingsCount) => {
-                      if (!err && settingsCount.count === 0) {
-                        const defaultColors = getDefaultThemeColors();
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'default_organisation', 'My Organisation']);
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'theme_colors', JSON.stringify(defaultColors)]);
-                        // Initialize override toggles (all default to true - allow customisation)
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_theme_customisation', 'true']);
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_image_customisation', 'true']);
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_links_customisation', 'true']);
-                        db.run("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_privacy_customisation', 'true']);
-                      }
-                      
-                      // Generate JWT token for new user
-                      const token = jwt.sign(
-                        {
-                          user_id: userId,
-                          organisation_id: orgId,
-                          role: 'owner'
-                        },
-                        JWT_SECRET,
-                        { expiresIn: JWT_EXPIRES_IN }
-                      );
-                      
-                      // Set httpOnly cookie
-                      res.cookie('authToken', token, {
-                        httpOnly: true,
-                        secure: NODE_ENV === 'production',
-                        sameSite: 'strict',
-                        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-                      });
-                      
-                      res.json({ success: true });
-                    });
-                  });
-                });
-              }
-            });
-          } else {
-            return res.status(401).json({ error: 'Invalid email or password' });
-          }
-        });
-        return;
+        return res.status(401).json({ error: 'Invalid email or password' });
       }
-      
+
       // Verify password
       const passwordMatch = await bcrypt.compare(password, user.password_hash);
       if (!passwordMatch) {
