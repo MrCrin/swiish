@@ -231,7 +231,7 @@ module.exports = {
   // Used for: rounded-card, rounded-container, rounded-button, rounded-input, rounded-badge, rounded-full
   borderRadius: {
     'card': '40px',        // Cards, modals (equivalent to rounded-2xl)
-    'container': '15px',   // Simple containers, info boxes (equivalent to rounded-lg)
+    'container': '25px',   // Simple containers, info boxes (equivalent to rounded-lg)
     'page': '1.5rem',      // Setup/login pages (equivalent to rounded-3xl)
     'button': '9999px',    // Buttons (equivalent to rounded-full)
     'input': '0.75rem',    // Input fields (equivalent to rounded-xl)

@@ -1778,11 +1778,11 @@ const [settings, setSettings] = useState({
               const userKey = user.userId || user.userEmail || 'unknown';
               
               return (
-                <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-6">
+                <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px]">
                 {/* User Info Box (top) - only shown for owners */}
                   {userRole === 'owner' && user.userEmail && (
-                  <div className="w-full mb-4">
-                    <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-3 text-xs border border-border dark:border-border-dark">
+                  <div className="w-full mb-[15px]">
+                    <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-5 text-xs border border-border dark:border-border-dark min-h-[150px]">
                         <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
                       <div className="flex items-center justify-between mb-2">
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-badge text-xs font-medium ${
@@ -1845,15 +1845,15 @@ const [settings, setSettings] = useState({
                 )}
                 
                   {/* Cards for this user - stacked vertically */}
-                  <div className="w-full mt-4 space-y-4">
+                  <div className="w-full space-y-[15px]">
                     {userCards.length > 0 ? (
                       <>
                         {userCards.map(card => (
-                          <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-badge p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                          <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-badge p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
                             <div className="w-full h-full flex flex-col">
-                              <div className="flex-1 flex flex-row items-start gap-3 mb-3 relative">
-                                <div className="w-16 h-16 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
-                                  {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-3 text-text-muted-subtle dark:text-text-muted-dark" />}
+                              <div className="flex-1 flex flex-row items-start gap-5 mb-3 relative">
+                                <div className="w-20 h-20 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
+                                  {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-5 text-text-muted-subtle dark:text-text-muted-dark" />}
                                 </div>
                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(card.slug); }} className="absolute top-0 right-0 p-2 text-text-muted-subtle dark:text-text-muted-dark hover:text-error-text dark:hover:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark rounded-full transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -1894,7 +1894,7 @@ const [settings, setSettings] = useState({
                           </div>
                         ))}
                         {/* Create Card button at bottom of card list */}
-                        <div className="bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-container border-thick border-dashed border-border dark:border-border-dark p-4 flex items-center justify-center">
+                        <div className="bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-container border-thick border-dashed border-border dark:border-border-dark p-[15px] flex items-center justify-center">
                           <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-2 text-sm font-medium text-white bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                       </div>
                     </>
@@ -2365,11 +2365,11 @@ const [settings, setSettings] = useState({
                 const userKey = user.userId || user.userEmail || 'unknown';
                 
                 return (
-                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-6">
+                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px]">
                     {/* User Info Box (top) - only shown for owners */}
                     {userRole === 'owner' && user.userEmail && (
-                      <div className="w-full mb-4">
-                        <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-3 text-xs border border-border dark:border-border-dark">
+                      <div className="w-full mb-[15px]">
+                        <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-3 text-xs border border-border dark:border-border-dark min-h-[120px]">
                           <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
                           <div className="flex items-center justify-between mb-2">
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -2432,14 +2432,14 @@ const [settings, setSettings] = useState({
                     )}
                     
                     {/* Cards for this user - stacked vertically */}
-                    <div className="w-full mt-4 space-y-4">
+                    <div className="w-full space-y-[15px]">
                       {userCards.length > 0 ? (
                         <>
                           {userCards.map(card => (
                             <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-badge p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
                               <div className="w-full h-full flex flex-col">
                                 <div className="flex-1 flex flex-row items-start gap-3 mb-3 relative">
-                                  <div className="w-16 h-16 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
+                                  <div className="w-20 h-20 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
                                     {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-3 text-text-muted-subtle dark:text-text-muted-dark" />}
                                   </div>
                                   <button onClick={(e) => { e.stopPropagation(); handleDelete(card.slug); }} className="absolute top-0 right-0 p-2 text-text-muted-subtle dark:text-text-muted-dark hover:text-error-text dark:hover:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark rounded-full transition-colors">
@@ -2481,7 +2481,7 @@ const [settings, setSettings] = useState({
                             </div>
                           ))}
                           {/* Create Card button at bottom of card list */}
-                          <div className="bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-container border-thick border-dashed border-border dark:border-border-dark p-4 flex items-center justify-center">
+                          <div className="bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-container border-thick border-dashed border-border dark:border-border-dark p-[15px] flex items-center justify-center">
                             <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-2 text-sm font-medium text-white bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                           </div>
                         </>
