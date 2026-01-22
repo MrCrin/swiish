@@ -6,6 +6,10 @@
   "production": {
     "driver": "sqlite3",
     "filename": "./data/cards.db"
+  },
+  "demo": {
+    "driver": "sqlite3",
+    "filename": "./data/cards-demo.db"
   }
 }
 

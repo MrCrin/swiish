@@ -22,7 +22,7 @@ The easiest way to run Swiish is with Docker Compose.
 ```yaml
 services:
   swiish:
-    image: ghcr.io/MrCrin/swiish:latest
+    image: ghcr.io/mrcrin/swiish:latest
     container_name: swiish
     restart: unless-stopped
     ports:
@@ -33,11 +33,10 @@ services:
     environment:
       # --- REQUIRED ---
       - JWT_SECRET=change_this_to_a_long_random_string
-      - ADMIN_PASSWORD=change_this_password
-      
-      # --- OPTIONAL (Production) ---
+
+      # --- OPTIONAL ---
       - NODE_ENV=production
-      - APP_URL=[https://cards.yourdomain.com](https://cards.yourdomain.com)
+      - APP_URL=https://cards.yourdomain.com
 ```
 
 2. **Run it:**
@@ -56,8 +55,6 @@ You can configure Swiish using environment variables.
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `JWT_SECRET` | **Required.** Random string for signing sessions. | *None* |
-| `ADMIN_PASSWORD` | **Required.** Password for the initial admin account. | *None* |
-| `ADMIN_EMAIL` | Email address for the default admin user. | `admin@localhost` |
 | `APP_URL` | The public URL of your instance. Crucial for QR codes. | `http://localhost:8095` |
 | `PORT` | Internal port the app listens on. | `3000` |
 | `NODE_ENV` | Environment mode. | `development` |
