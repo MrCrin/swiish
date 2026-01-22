@@ -1824,7 +1824,7 @@ const [settings, setSettings] = useState({
         <div className="min-h-screen bg-main dark:bg-main-dark bg-main-texture p-6 md:p-12 flex flex-col">
         <div className="max-w-6xl mx-auto flex-1 w-full">
           {/* UPDATED HEADER: flex-wrap + gap adjustments for mobile */}
-          <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
+          <div className="flex flex-wrap justify-between items-center mb-8 gap-4 relative z-10">
              <div>
                <h1 className="text-2xl md:text-3xl font-bold text-text-primary dark:text-text-primary-dark">{settings?.default_organisation || 'People'}</h1>
                <p className="text-sm md:text-base text-text-muted dark:text-text-muted-dark">Manage your people</p>
@@ -1855,8 +1855,8 @@ const [settings, setSettings] = useState({
                 {/* User Info Box (top) - only shown for owners */}
                   {userRole === 'owner' && user.userEmail && (
                   <div className="w-full mb-4">
-                                      <div className="bg-surface dark:bg-surface-dark/50 rounded-t-container rounded-b-badge p-5 text-xs border border-border dark:border-border-dark min-h-[130px]">
-                                          <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
+                    <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 text-xs border border-border dark:border-border-dark">
+                        <div className="text-text-secondary dark:text-text-muted-dark truncate mb-2 font-medium">{user.userEmail}</div>
                       <div className="flex items-center justify-between mb-2">
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-badge text-xs font-medium ${
                             user.userRole === 'owner' 
@@ -1922,11 +1922,11 @@ const [settings, setSettings] = useState({
                     {userCards.length > 0 ? (
                       <>
                         {userCards.map(card => (
-                                                  <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-badge p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                                                    <div className="w-full h-full flex flex-col">
+                          <div key={card.slug} className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                            <div className="w-full h-full flex flex-col">
                               <div className="flex-1 flex flex-row items-start gap-3 mb-3 relative">
-                                                              <div className="w-20 h-20 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
-                                                                {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-5 text-text-muted-subtle dark:text-text-muted-dark" />}
+                                <div className="w-16 h-16 rounded-full bg-surface dark:bg-surface-dark overflow-hidden border-thick border-border-subtle dark:border-border-dark flex-shrink-0">
+                                  {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt="avatar" /> : <User className="w-full h-full p-3 text-text-muted-subtle dark:text-text-muted-dark" />}
                                 </div>
                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(card.slug); }} className="absolute top-0 right-0 p-2 text-text-muted-subtle dark:text-text-muted-dark hover:text-error-text dark:hover:text-error-text-dark hover:bg-error-bg dark:hover:bg-error-bg-dark rounded-full transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -1972,9 +1972,9 @@ const [settings, setSettings] = useState({
                       </div>
                     </>
                   ) : (
-                                        /* No cards - show Create Card button in place */
-                                        <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                                          <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
+                      /* No cards - show Create Card button in place */
+                      <div className="bg-surface dark:bg-surface-dark/50 rounded-container p-3 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                        <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-container border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
                           <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-3 text-sm font-medium text-confirm-text dark:text-confirm-text-dark bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                         </div>
                     </div>
