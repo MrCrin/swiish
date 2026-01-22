@@ -2257,6 +2257,7 @@ const [settings, setSettings] = useState({
       <Routes>
         {/* Admin routes - must come before public routes to prevent matching */}
         <Route path="/login" element={renderAdminViews()} />
+        <Route path="/setup" element={renderAdminViews()} />
         <Route path="/people/edit/:slug" element={renderAdminViews()} />
         <Route path="/people" element={renderAdminViews()} />
         <Route path="/settings" element={renderAdminViews()} />
