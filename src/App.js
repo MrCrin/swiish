@@ -3796,8 +3796,11 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
 
   const fetchInvitations = async () => {
     try {
-      // We'll need to add an endpoint to list invitations, or we can skip this for now
-      // For now, we'll just fetch users
+      const res = await apiCall(`${API_ENDPOINT}/admin/invitations`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvitations(data.invitations);
+      }
     } catch (e) {
       console.error('Failed to fetch invitations:', e);
     }
@@ -3870,10 +3873,19 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         body: JSON.stringify(newInvitation)
       });
       if (res.ok) {
+        const data = await res.json();
         setIsSuccess(true);
         setTimeout(() => setIsSuccess(false), 2000);
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
+
+        // Show warning if email failed
+        if (data.status === 'failed' && showAlert) {
+          showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
+        }
+
+        // Reload invitations list
+        fetchInvitations();
       } else {
         const errorData = await res.json().catch(() => ({}));
         if (showAlert) showAlert(errorData.error || 'Failed to send invitation', 'error');
@@ -3926,6 +3938,48 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         },
         'Remove User',
         'Remove',
+        'Cancel'
+      );
+    }
+  };
+
+  const handleRetryInvitation = async (invitationId) => {
+    try {
+      const res = await apiCall(`${API_ENDPOINT}/admin/invitations/${invitationId}/retry`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (showAlert) {
+          showAlert(data.success ? 'Invitation email sent successfully' : 'Failed to send invitation email',
+                    data.success ? 'success' : 'error');
+        }
+        fetchInvitations();
+      }
+    } catch (e) {
+      if (showAlert) showAlert('Error retrying invitation', 'error');
+    }
+  };
+
+  const handleDeleteInvitation = async (invitationId) => {
+    if (showConfirm) {
+      showConfirm(
+        'Are you sure you want to delete this invitation?',
+        async () => {
+          try {
+            const res = await apiCall(`${API_ENDPOINT}/admin/invitations/${invitationId}`, {
+              method: 'DELETE'
+            });
+            if (res.ok) {
+              if (showAlert) showAlert('Invitation deleted', 'success');
+              fetchInvitations();
+            }
+          } catch (e) {
+            if (showAlert) showAlert('Error deleting invitation', 'error');
+          }
+        },
+        'Delete Invitation',
+        'Delete',
         'Cancel'
       );
     }
@@ -4064,6 +4118,83 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
                       </div>
                     );
                   })
+                )}
+              </div>
+            </div>
+
+            {/* Pending Invitations Section */}
+            <div className="bg-card dark:bg-card-dark rounded-input shadow-sm border border-border dark:border-border-dark overflow-hidden">
+              <div className="p-6 border-b border-border dark:border-border-dark">
+                <h2 className="text-lg font-semibold text-text-primary dark:text-text-primary-dark">Pending Invitations</h2>
+                <p className="text-sm text-text-secondary dark:text-text-muted-dark mt-1">Invitations sent but not yet accepted</p>
+              </div>
+              <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                {invitations.filter(inv => inv.status !== 'accepted').length === 0 ? (
+                  <div className="p-6 text-center text-text-muted dark:text-text-muted-dark">
+                    No pending invitations
+                  </div>
+                ) : (
+                  invitations.filter(inv => inv.status !== 'accepted').map(inv => (
+                    <div key={inv.id} className="p-6 flex items-center justify-between hover:bg-surface dark:hover:bg-surface-dark/50 transition-colors">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                            <Mail className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-text-primary dark:text-text-primary-dark">
+                              {inv.email}
+                            </div>
+                            <div className="text-sm text-text-muted dark:text-text-muted-dark flex items-center gap-2 mt-1">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-badge text-xs font-medium ${
+                                inv.status === 'sent' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                                inv.status === 'failed' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                inv.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                inv.status === 'expired' ? 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300' :
+                                'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              }`}>
+                                {inv.status === 'sent' && 'Sent'}
+                                {inv.status === 'failed' && 'Failed'}
+                                {inv.status === 'pending' && 'Pending'}
+                                {inv.status === 'expired' && 'Expired'}
+                              </span>
+                              {inv.role === 'owner' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-badge text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                                  Owner
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-badge text-xs font-medium bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark">
+                                  Member
+                                </span>
+                              )}
+                              {inv.invited_by_email && (
+                                <span className="text-xs">invited by {inv.invited_by_email}</span>
+                              )}
+                              <span className="text-xs">• {new Date(inv.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {(inv.status === 'failed' || inv.status === 'pending') && (
+                          <button
+                            onClick={() => handleRetryInvitation(inv.id)}
+                            className="px-3 py-1.5 text-sm bg-action dark:bg-action-dark text-white rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center gap-1"
+                            title="Retry sending email"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Retry
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteInvitation(inv.id)}
+                          className="px-3 py-1.5 text-sm bg-error-bg dark:bg-error-bg-dark text-error dark:text-error-text-dark rounded-badge hover:bg-error-bg dark:hover:bg-error-bg-dark flex items-center gap-1"
+                          title="Delete invitation"
+                        >
+                          <Trash2 className="w-3 h-3" /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

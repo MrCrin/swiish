@@ -2113,50 +2113,109 @@ app.patch('/api/admin/users/:userId', requireAuth, requireRole('owner'), apiLimi
   });
 });
 
-// DELETE Remove User from Organization
+// DELETE Remove User from Organization (Hard Delete with Cascade)
 app.delete('/api/admin/users/:userId', requireAuth, requireRole('owner'), apiLimiter, csrfProtection, [
   param('userId').isUUID().withMessage('Invalid user ID')
-], handleValidationErrors, (req, res, next) => {
+], handleValidationErrors, async (req, res, next) => {
   if (!req.user.organisationId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   const { userId } = req.params;
-  
+
   // Cannot delete yourself
   if (userId === req.user.id) {
     return res.status(400).json({ error: 'Cannot delete yourself' });
   }
-  
-  // Verify user is in same organization and get their role
-  db.get("SELECT id, role FROM users WHERE id = ? AND organisation_id = ?", [userId, req.user.organisationId], (err, user) => {
-    if (err) return next(err);
+
+  try {
+    // Verify user is in same organization and get their info
+    const user = await new Promise((resolve, reject) => {
+      db.get("SELECT id, email, role, organisation_id FROM users WHERE id = ? AND organisation_id = ?",
+        [userId, req.user.organisationId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     // If deleting owner, check if this is the last owner
     if (user.role === 'owner') {
-      db.get("SELECT COUNT(*) as count FROM users WHERE organisation_id = ? AND role = 'owner'", [req.user.organisationId], (err, ownerCount) => {
-        if (err) return next(err);
-        if (ownerCount.count === 1) {
-          return res.status(400).json({ error: 'Cannot delete last owner from organization' });
-        }
-        
-        // Remove user from organization (set organisation_id to NULL)
-        db.run("UPDATE users SET organisation_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [userId], (err) => {
-          if (err) return next(err);
-          res.json({ success: true });
-        });
+      const ownerCount = await new Promise((resolve, reject) => {
+        db.get("SELECT COUNT(*) as count FROM users WHERE organisation_id = ? AND role = 'owner'",
+          [req.user.organisationId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
       });
-    } else {
-      // Remove user from organization
-      db.run("UPDATE users SET organisation_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [userId], (err) => {
-        if (err) return next(err);
-        res.json({ success: true });
-      });
+
+      if (ownerCount.count === 1) {
+        return res.status(400).json({ error: 'Cannot delete last owner from organization' });
+      }
     }
-  });
+
+    // Capture snapshot of user and their cards for audit
+    const cards = await new Promise((resolve, reject) => {
+      db.all("SELECT * FROM cards WHERE user_id = ?", [userId], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    const userSettings = await new Promise((resolve, reject) => {
+      db.get("SELECT * FROM user_settings WHERE user_id = ?", [userId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // Log to audit before deletion
+    await logAudit(
+      'user_deleted',
+      'user',
+      userId,
+      {
+        user: user,
+        cards: cards,
+        settings: userSettings,
+        card_count: cards.length
+      },
+      req.user.id,
+      req.user.organisationId
+    );
+
+    // TRUE HARD DELETE - foreign keys will CASCADE to all child records
+    // This will automatically delete:
+    // - cards (ON DELETE CASCADE)
+    // - user_settings (ON DELETE CASCADE)
+    // - password_reset_tokens (ON DELETE CASCADE)
+    // - email_verification_tokens (ON DELETE CASCADE)
+    // - invitations where user is inviter (ON DELETE CASCADE)
+    await new Promise((resolve, reject) => {
+      db.run("DELETE FROM users WHERE id = ?", [userId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    console.log(`[USER DELETED] User ${user.email} deleted by ${req.user.email}, ${cards.length} cards cascaded`);
+
+    res.json({
+      success: true,
+      deletedCards: cards.length
+    });
+
+  } catch (err) {
+    console.error('[USER DELETE ERROR]', err);
+    next(err);
+  }
 });
 
 // --- INVITATION ENDPOINTS ---
@@ -2169,74 +2228,134 @@ app.post('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter
   if (!req.user.organisationId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   const { email, role } = req.body;
   const emailLower = email.toLowerCase();
-  
-  // Check if user already exists
-  db.get("SELECT id FROM users WHERE email = ?", [emailLower], async (err, existingUser) => {
-    if (err) return next(err);
+
+  try {
+    // Check if user already exists
+    const existingUser = await new Promise((resolve, reject) => {
+      db.get("SELECT id FROM users WHERE email = ?", [emailLower], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
-    
-    // Check if invitation already exists and not expired
-    db.get("SELECT id FROM invitations WHERE email = ? AND organisation_id = ? AND accepted_at IS NULL AND expires_at > datetime('now')", [emailLower, req.user.organisationId], async (err, existingInvitation) => {
-      if (err) return next(err);
-      if (existingInvitation) {
-        return res.status(400).json({ error: 'Active invitation already exists for this email' });
-      }
-      
-      // Generate secure token
-      const token = require('crypto').randomBytes(32).toString('hex');
-      const invitationId = require('crypto').randomUUID();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
-      
-      // Create invitation
-      db.run(
-        "INSERT INTO invitations (id, organisation_id, email, token, role, invited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [invitationId, req.user.organisationId, emailLower, token, role, req.user.id, expiresAt.toISOString()],
-        async (err) => {
-          if (err) return next(err);
-          
-          // Get organization name for email
-          db.get("SELECT name FROM organisations WHERE id = ?", [req.user.organisationId], async (err, org) => {
-            if (err) return next(err);
-            const orgName = org ? org.name : 'Organization';
-            
-            // Send invitation email
-            const invitationUrl = `${APP_URL}/invite/${token}`;
-            const emailHtml = `
-              <h2>You've been invited to join ${orgName}</h2>
-              <p>You've been invited to join ${orgName} on Swiish. Click the link below to accept the invitation and create your account.</p>
-              <p><a href="${invitationUrl}" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a></p>
-              <p>This invitation will expire in 7 days.</p>
-              <p>If you didn't expect this invitation, you can safely ignore this email.</p>
-            `;
-            const emailText = `You've been invited to join ${orgName} on Swiish. Visit ${invitationUrl} to accept the invitation. This invitation expires in 7 days.`;
-            
-            try {
-              if (emailTransporter) {
-                await emailTransporter.sendMail({
-                  from: SMTP_FROM,
-                  to: emailLower,
-                  subject: `Invitation to join ${orgName} on Swiish`,
-                  text: emailText,
-                  html: emailHtml
-                });
-              }
-            } catch (emailErr) {
-              console.error('Failed to send invitation email:', emailErr);
-              // Don't fail the request if email fails, just log it
-            }
-            
-            res.json({ success: true, invitationId, expiresAt: expiresAt.toISOString() });
-          });
+
+    // Check if ACTIVE invitation exists (pending/sent, not expired)
+    // NOTE: This allows retries after failed/expired invitations
+    const existingInvitation = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT id, status FROM invitations WHERE email = ? AND organisation_id = ? AND status IN ('pending', 'sent') AND expires_at > datetime('now')",
+        [emailLower, req.user.organisationId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         }
       );
     });
-  });
+
+    if (existingInvitation) {
+      return res.status(400).json({
+        error: 'Active invitation already exists for this email',
+        status: existingInvitation.status
+      });
+    }
+
+    // Generate secure token
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const invitationId = require('crypto').randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Create invitation with status='pending' first
+    await new Promise((resolve, reject) => {
+      db.run(
+        "INSERT INTO invitations (id, organisation_id, email, token, role, invited_by, expires_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
+        [invitationId, req.user.organisationId, emailLower, token, role, req.user.id, expiresAt.toISOString()],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // Get organization name for email
+    const org = await new Promise((resolve, reject) => {
+      db.get("SELECT name FROM organisations WHERE id = ?", [req.user.organisationId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    const orgName = org ? org.name : 'Organization';
+
+    // Attempt to send email
+    let emailStatus = 'sent';
+    let emailError = null;
+
+    try {
+      if (emailTransporter) {
+        const invitationUrl = `${APP_URL}/invite/${token}`;
+        const emailHtml = `
+          <h2>You've been invited to join ${orgName}</h2>
+          <p>You've been invited to join ${orgName} on Swiish. Click the link below to accept the invitation and create your account.</p>
+          <p><a href="${invitationUrl}" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a></p>
+          <p>This invitation will expire in 7 days.</p>
+          <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+        `;
+        const emailText = `You've been invited to join ${orgName} on Swiish. Visit ${invitationUrl} to accept the invitation. This invitation expires in 7 days.`;
+
+        await emailTransporter.sendMail({
+          from: SMTP_FROM,
+          to: emailLower,
+          subject: `Invitation to join ${orgName} on Swiish`,
+          text: emailText,
+          html: emailHtml
+        });
+      }
+    } catch (emailErr) {
+      console.error('Failed to send invitation email:', emailErr);
+      emailStatus = 'failed';
+      emailError = emailErr.message;
+    }
+
+    // Update invitation status
+    await new Promise((resolve, reject) => {
+      db.run(
+        "UPDATE invitations SET status = ? WHERE id = ?",
+        [emailStatus, invitationId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // Log audit event
+    await logAudit(
+      'invitation_created',
+      'invitation',
+      invitationId,
+      { email: emailLower, role, status: emailStatus },
+      req.user.id,
+      req.user.organisationId
+    );
+
+    // Return success with status info
+    res.json({
+      success: true,
+      invitationId,
+      expiresAt: expiresAt.toISOString(),
+      status: emailStatus,
+      ...(emailError && { warning: 'Invitation created but email failed to send. You can retry from the admin panel.' })
+    });
+
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET Invitation Details (Public)
@@ -2347,6 +2466,196 @@ app.post('/api/invitations/:token/accept', publicReadLimiter, [
       });
     }
   );
+});
+
+// --- INVITATION MANAGEMENT ENDPOINTS ---
+
+// GET List all invitations for organization
+app.get('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter, (req, res, next) => {
+  if (!req.user.organisationId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  db.all(
+    `SELECT
+      i.id,
+      i.email,
+      i.role,
+      i.status,
+      i.created_at,
+      i.expires_at,
+      i.accepted_at,
+      u.email as invited_by_email
+    FROM invitations i
+    LEFT JOIN users u ON i.invited_by = u.id
+    WHERE i.organisation_id = ?
+    ORDER BY i.created_at DESC`,
+    [req.user.organisationId],
+    (err, invitations) => {
+      if (err) return next(err);
+      res.json({ invitations });
+    }
+  );
+});
+
+// DELETE Cancel invitation
+app.delete('/api/admin/invitations/:invitationId', requireAuth, requireRole('owner'), apiLimiter, csrfProtection, [
+  param('invitationId').isUUID().withMessage('Invalid invitation ID')
+], handleValidationErrors, async (req, res, next) => {
+  if (!req.user.organisationId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { invitationId } = req.params;
+
+  try {
+    // Verify invitation belongs to organization
+    const invitation = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT id, email, status, accepted_at FROM invitations WHERE id = ? AND organisation_id = ?",
+        [invitationId, req.user.organisationId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invitation not found' });
+    }
+
+    // Don't allow deletion of accepted invitations (for audit trail)
+    if (invitation.accepted_at) {
+      return res.status(400).json({ error: 'Cannot delete accepted invitation' });
+    }
+
+    // Log audit before deletion
+    await logAudit(
+      'invitation_deleted',
+      'invitation',
+      invitationId,
+      { email: invitation.email, status: invitation.status },
+      req.user.id,
+      req.user.organisationId
+    );
+
+    // Delete invitation
+    await new Promise((resolve, reject) => {
+      db.run("DELETE FROM invitations WHERE id = ?", [invitationId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST Retry sending failed invitation
+app.post('/api/admin/invitations/:invitationId/retry', requireAuth, requireRole('owner'), apiLimiter, csrfProtection, [
+  param('invitationId').isUUID().withMessage('Invalid invitation ID')
+], handleValidationErrors, async (req, res, next) => {
+  if (!req.user.organisationId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { invitationId } = req.params;
+
+  try {
+    // Get invitation
+    const invitation = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT i.*, o.name as org_name
+         FROM invitations i
+         JOIN organisations o ON i.organisation_id = o.id
+         WHERE i.id = ? AND i.organisation_id = ?`,
+        [invitationId, req.user.organisationId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invitation not found' });
+    }
+
+    // Only allow retry for failed or pending invitations
+    if (invitation.status !== 'failed' && invitation.status !== 'pending') {
+      return res.status(400).json({ error: `Cannot retry invitation with status: ${invitation.status}` });
+    }
+
+    // Check if expired
+    if (new Date(invitation.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Invitation has expired. Please delete and create a new one.' });
+    }
+
+    // Attempt to send email
+    let emailStatus = 'sent';
+    let emailError = null;
+
+    try {
+      if (emailTransporter) {
+        const invitationUrl = `${APP_URL}/invite/${invitation.token}`;
+        const emailHtml = `
+          <h2>You've been invited to join ${invitation.org_name}</h2>
+          <p>You've been invited to join ${invitation.org_name} on Swiish. Click the link below to accept the invitation and create your account.</p>
+          <p><a href="${invitationUrl}" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a></p>
+          <p>This invitation will expire in 7 days.</p>
+          <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+        `;
+        const emailText = `You've been invited to join ${invitation.org_name} on Swiish. Visit ${invitationUrl} to accept the invitation. This invitation expires in 7 days.`;
+
+        await emailTransporter.sendMail({
+          from: SMTP_FROM,
+          to: invitation.email,
+          subject: `Invitation to join ${invitation.org_name} on Swiish`,
+          text: emailText,
+          html: emailHtml
+        });
+      }
+    } catch (emailErr) {
+      console.error('Failed to send invitation email:', emailErr);
+      emailStatus = 'failed';
+      emailError = emailErr.message;
+    }
+
+    // Update invitation status
+    await new Promise((resolve, reject) => {
+      db.run(
+        "UPDATE invitations SET status = ? WHERE id = ?",
+        [emailStatus, invitationId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // Log audit
+    await logAudit(
+      'invitation_retry',
+      'invitation',
+      invitationId,
+      { email: invitation.email, new_status: emailStatus },
+      req.user.id,
+      req.user.organisationId
+    );
+
+    res.json({
+      success: emailStatus === 'sent',
+      status: emailStatus,
+      ...(emailError && { error: 'Email failed to send. Please check SMTP configuration.' })
+    });
+
+  } catch (err) {
+    next(err);
+  }
 });
 
 // --- PASSWORD RESET ENDPOINTS ---
