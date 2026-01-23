@@ -2048,18 +2048,35 @@ app.post('/api/admin/users', requireAuth, requireRole('owner'), apiLimiter, csrf
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
-    
-    // Create user (owner or member) - no restriction on creating members
-    // Owners can always create members regardless of how many owners exist
-    const userId = require('crypto').randomUUID();
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    db.run(
-      "INSERT INTO users (id, email, password_hash, organisation_id, role, email_verified) VALUES (?, ?, ?, ?, ?, ?)",
-      [userId, email.toLowerCase(), passwordHash, req.user.organisationId, role, 0],
-      (err) => {
+
+    // Check if ACTIVE invitation exists (pending/sent, not expired)
+    db.get(
+      "SELECT id, status FROM invitations WHERE email = ? AND organisation_id = ? AND status IN ('pending', 'sent') AND expires_at > datetime('now')",
+      [email.toLowerCase(), req.user.organisationId],
+      (err, existingInvitation) => {
         if (err) return next(err);
-        res.json({ success: true, userId, email: email.toLowerCase(), role });
+        if (existingInvitation) {
+          return res.status(400).json({
+            error: 'An active invitation already exists for this email. Please wait for the user to accept the invitation or delete it first.',
+            invitationStatus: existingInvitation.status
+          });
+        }
+
+        // Create user (owner or member) - no restriction on creating members
+        // Owners can always create members regardless of how many owners exist
+        const userId = require('crypto').randomUUID();
+        bcrypt.hash(password, 10, (err, passwordHash) => {
+          if (err) return next(err);
+
+          db.run(
+            "INSERT INTO users (id, email, password_hash, organisation_id, role, email_verified) VALUES (?, ?, ?, ?, ?, ?)",
+            [userId, email.toLowerCase(), passwordHash, req.user.organisationId, role, 0],
+            (err) => {
+              if (err) return next(err);
+              res.json({ success: true, userId, email: email.toLowerCase(), role });
+            }
+          );
+        });
       }
     );
   });

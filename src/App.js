@@ -1561,25 +1561,25 @@ const [settings, setSettings] = useState({
   const handleRemoveUser = async (userId, userEmail) => {
     if (showConfirm) {
       showConfirm(
-        `Are you sure you want to remove ${userEmail} from the organisation?`,
+        `Are you sure you want to permanently delete ${userEmail}? This will delete the user and all their cards. This action cannot be undone.`,
         async () => {
           try {
             const res = await apiCall(`${API_ENDPOINT}/admin/users/${userId}`, {
               method: 'DELETE'
             });
             if (res.ok) {
-              if (showAlert) showAlert('User removed successfully', 'success');
+              if (showAlert) showAlert('User deleted successfully', 'success');
               checkAuth(); // Refresh card list
             } else {
               const errorData = await res.json().catch(() => ({}));
-              if (showAlert) showAlert(errorData.error || 'Failed to remove user', 'error');
+              if (showAlert) showAlert(errorData.error || 'Failed to delete user', 'error');
             }
           } catch (e) {
-            if (showAlert) showAlert('Error removing user', 'error');
+            if (showAlert) showAlert('Error deleting user', 'error');
           }
         },
-        'Remove User',
-        'Remove',
+        'Delete User',
+        'Delete',
         'Cancel'
       );
     }
@@ -3919,25 +3919,25 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
   const handleRemoveUser = async (userId, userEmail) => {
     if (showConfirm) {
       showConfirm(
-        `Are you sure you want to remove ${userEmail} from the organisation?`,
+        `Are you sure you want to permanently delete ${userEmail}? This will delete the user and all their cards. This action cannot be undone.`,
         async () => {
           try {
             const res = await apiCall(`${API_ENDPOINT}/admin/users/${userId}`, {
               method: 'DELETE'
             });
             if (res.ok) {
-              if (showAlert) showAlert('User removed successfully', 'success');
+              if (showAlert) showAlert('User deleted successfully', 'success');
               fetchUsers();
             } else {
               const errorData = await res.json().catch(() => ({}));
-              if (showAlert) showAlert(errorData.error || 'Failed to remove user', 'error');
+              if (showAlert) showAlert(errorData.error || 'Failed to delete user', 'error');
             }
           } catch (e) {
-            if (showAlert) showAlert('Error removing user', 'error');
+            if (showAlert) showAlert('Error deleting user', 'error');
           }
         },
-        'Remove User',
-        'Remove',
+        'Delete User',
+        'Delete',
         'Cancel'
       );
     }
