@@ -167,6 +167,15 @@ function validateFilePath(filePath) {
 const DB_FILENAME = IS_DEMO_MODE ? 'cards-demo.db' : 'cards.db';
 const db = new sqlite3.Database(path.join(DATA_DIR, DB_FILENAME));
 
+// CRITICAL: Enable foreign key constraints (required for CASCADE to work)
+db.run("PRAGMA foreign_keys = ON", (err) => {
+  if (err) {
+    console.error('CRITICAL: Failed to enable foreign keys:', err);
+    process.exit(1);
+  }
+  console.log('[DB] Foreign key constraints enabled');
+});
+
 if (IS_DEMO_MODE) {
   console.log(`[DB] Using demo database: ${DB_FILENAME}`);
 } else {
@@ -177,6 +186,24 @@ if (IS_DEMO_MODE) {
 const dbRun = util.promisify(db.run.bind(db));
 const dbGet = util.promisify(db.get.bind(db));
 
+// Helper function to log audit events
+async function logAudit(eventType, entityType, entityId, entityData, performedBy, organisationId) {
+  const auditId = require('crypto').randomUUID();
+  return new Promise((resolve, reject) => {
+    db.run(
+      "INSERT INTO audit_log (id, event_type, entity_type, entity_id, entity_data, performed_by, organisation_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [auditId, eventType, entityType, entityId, JSON.stringify(entityData), performedBy, organisationId],
+      (err) => {
+        if (err) {
+          console.error('[AUDIT] Failed to log event:', err);
+          reject(err);
+        } else {
+          resolve(auditId);
+        }
+      }
+    );
+  });
+}
 
 // Helper function to get default theme colours (hex-only format)
 const getDefaultThemeColors = () => [
