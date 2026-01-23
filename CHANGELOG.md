@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Updated Docker Base Image**: Upgraded Docker base image from `node:18-alpine` to `node:22-alpine` for both build and production stages
+- **Dependency Optimization**: Moved `react-scripts` from production dependencies to dev dependencies to reduce production image size
+
 ## [0.5.1] - 2026-01-22
 
 ### 🐛 Fixed
