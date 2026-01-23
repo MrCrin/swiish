@@ -1,4 +1,4 @@
-Firstly, thank you for considering contributing to Swiish. This started as a personal learning popjrect to create something I wnated and needed and has grown into a project that I hope others will find useful.
+Firstly, thank you for considering contributing to Swiish. This started as a personal learning project to create something I wanted and needed and has grown into a project that I hope others will find useful.
 
 Swiish is an open-source, self-hostable platform for digital business cards. My goal is to provide a professional, privacy-focused, and offline-tolerant solution for sharing your details while networking, both in person and digitally.
 
@@ -11,13 +11,12 @@ To ensure that Swiish is a welcoming and inclusive project for everyone. By part
 *   Be collaborative and open to feedback.
 *   Gracefully accept constructive criticism.
 
-If you witness or experience any behavior that goes against these principles, please report it to the project maintainer.
-
 ## How Can I Contribute?
 
 ### Reporting Bugs
 
 If you find a bug, please open an issue on GitHub. Include as much detail as possible:
+*   Use the template provided.
 *   A clear, descriptive title.
 *   Steps to reproduce the bug.
 *   What you expected to happen vs. what actually happened.
@@ -26,13 +25,14 @@ If you find a bug, please open an issue on GitHub. Include as much detail as pos
 
 ### Suggesting Features
 
-We love new ideas! If you have a feature request:
+We love ideas. If you have a feature request:
+*   Use the template provided.
 *   Check if the feature has already been suggested.
 *   Open an issue and describe the feature, why it's useful, and how it might work.
 
 ### Improving Documentation
 
-Documentation is just as important as code. If you see a typo, a confusing section, or something missing in the README or other docs, feel free to submit a PR.
+Documentation is easily as important as code - and for the user more so. If you see a typo, a confusing section, or something missing in the README or other docs, feel free to submit an issue or fix it and submit a PR.
 
 ## Development Workflow
 
@@ -57,6 +57,8 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) to keep our 
 *   `style: fix linting errors`
 *   `refactor: simplify card rendering logic`
 
+You can also include a commit body with more details if needed - but don't feel obliged, just if it's helpful to 'future you' or others.
+
 ### Local Setup
 
 1.  Fork the repository.
@@ -65,15 +67,13 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) to keep our 
 4.  Set up your environment: `cp .env.example .env`
 5.  Run the development server: `npm run dev`
 
-For more details on the tech stack, see [`tech.md`](.kilocode/rules/memory-bank/tech.md).
-
 ## Pull Request Process
 
 1.  Ensure your code follows the existing style.
 2.  Update the documentation if you're adding or changing features.
 3.  Make sure your PR title follows Conventional Commits.
 4.  Provide a clear description of the changes in the PR body.
-5.  Wait for a review. We'll try to get back to you as soon as possible!
+5.  Wait for a review.
 
 ## Coding Standards
 
