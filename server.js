@@ -2448,12 +2448,27 @@ app.post('/api/invitations/:token/accept', publicReadLimiter, [
             
             // Mark invitation as accepted
             db.run(
-              "UPDATE invitations SET accepted_at = CURRENT_TIMESTAMP WHERE id = ?",
+              "UPDATE invitations SET accepted_at = CURRENT_TIMESTAMP, status = 'accepted' WHERE id = ?",
               [invitation.id],
-              (err) => {
+              async (err) => {
                 if (err) {
                   console.error('Failed to mark invitation as accepted:', err);
                   // Don't fail the request
+                } else {
+                  // Log audit event for invitation acceptance
+                  try {
+                    await logAudit(
+                      'invitation_accepted',
+                      'invitation',
+                      invitation.id,
+                      { email: invitation.email, role: invitation.role },
+                      userId,
+                      invitation.organisation_id
+                    );
+                  } catch (auditErr) {
+                    console.error('Failed to log invitation acceptance audit:', auditErr);
+                    // Don't fail the request if audit logging fails
+                  }
                 }
                 
                 // Generate JWT token
