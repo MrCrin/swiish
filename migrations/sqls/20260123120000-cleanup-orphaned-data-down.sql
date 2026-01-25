@@ -1,0 +1,1 @@
+-- Rollback cleanup (no-op: cannot restore deleted data)
