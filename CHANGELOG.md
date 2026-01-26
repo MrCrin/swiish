@@ -7,13 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- **Updated Docker Base Image**: Upgraded Docker base image from `node:18-alpine` to `node:22-alpine` for both build and production stages
-- **Dependency Optimization**: Moved `react-scripts` from production dependencies to dev dependencies to reduce production image size
+## [0.6.0] - 2026-01-26
+
+### Added
+- **Invitation System**: Completed invitation acceptance flow for user registration
+- **Invitation Management**: Admin can now manage invitations (create, view, revoke)
+- **Audit Logging**: Added audit log table and helper function for tracking system events
+- **Foreign Key Constraints**: Enabled foreign key constraints in database migrations for data integrity
+
+### Fixed
+- **User Creation Validation**: Prevent user creation when an active invitation already exists
+
+### Changed
+- **Card Layout**: Switched user cards to column layout for better readability
+- **Card Styling**: Adjusted card height and border radii for improved aesthetics
+
+### Technical
+- **Node.js Upgrade**: Updated Docker base image from `node:18-alpine` to `node:22-alpine`
+- **Dependency Optimization**: Moved `react-scripts` from production to dev dependencies
+- **Documentation**: Added CONTRIBUTING.md with contribution guidelines
 
 ## [0.5.1] - 2026-01-22
 
-### 🐛 Fixed
+### Fixed
 - **Setup Route Access**: Fixed missing `/setup` route that was causing 404 errors on fresh installations when not in demo mode
 
 ## [0.5.0] - 2026-01-22
