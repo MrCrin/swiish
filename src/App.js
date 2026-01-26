@@ -1845,14 +1845,14 @@ const [settings, setSettings] = useState({
                  </button>
                </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="columns-1 md:columns-2 lg:columns-3 gap-6">
               {groupCardsByUser(cardList).map(user => {
                 // Filter out entries without slugs (these represent users without cards)
                 const userCards = user.cards.filter(c => c.slug);
                 const userKey = user.userId || user.userEmail || 'unknown';
                 
                 return (
-                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px]">
+                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px] h-fit break-inside-avoid mb-6">
                     {/* User Info Box (top) - only shown for owners */}
                     {userRole === 'owner' && user.userEmail && (
                       <div className="w-full mb-[15px]">
@@ -1974,8 +1974,8 @@ const [settings, setSettings] = useState({
                         </>
                       ) : (
                         /* No cards - show Create Card button in place */
-                        <div className="bg-surface dark:bg-surface-dark/50 rounded-badge p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
-                          <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-badge border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
+                        <div className="bg-surface dark:bg-surface-dark/50 rounded-t-badge rounded-b-container p-5 border border-border dark:border-border-dark" style={{ aspectRatio: '1.586 / 1' }}>
+                          <div className="w-full h-full bg-surface dark:bg-surface-dark/30 rounded-t-badge rounded-b-badge border-thick border-dashed border-border dark:border-border-dark flex flex-col items-center justify-center">
                             <button onClick={() => setCreateCardModal({ isOpen: true, slug: '', userId: user.userId || user.userEmail })} className="px-4 py-3 text-sm font-medium text-white bg-action dark:bg-action-dark rounded-button hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center justify-center gap-2"><Plus className="w-4 h-4"/> Create Card</button>
                           </div>
                         </div>
