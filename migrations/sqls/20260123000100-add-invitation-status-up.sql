@@ -1,3 +1,6 @@
+-- Enable foreign key constraints (required for CASCADE to work)
+PRAGMA foreign_keys = ON;
+
 -- SQLite doesn't support ALTER with FOREIGN KEY changes, must recreate table
 CREATE TABLE invitations_new (
   id TEXT PRIMARY KEY,

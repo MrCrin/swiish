@@ -1,3 +1,6 @@
+-- Enable foreign key constraints (required for CASCADE to work)
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
   event_type TEXT NOT NULL,
