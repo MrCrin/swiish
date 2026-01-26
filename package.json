@@ -1,6 +1,6 @@
 {
   "name": "swiish",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Open-source digital business card platform with QR codes and PWA support",
   "private": false,
   "repository": {
@@ -44,7 +44,6 @@
     "react-dom": "^18.2.0",
     "react-phone-number-input": "^3.4.14",
     "react-router-dom": "^6.20.0",
-    "react-scripts": "5.0.1",
     "sqlite3": "^5.1.6",
     "validator": "^13.11.0"
   },
@@ -77,6 +76,7 @@
     "concurrently": "^8.2.2",
     "nodemon": "^3.1.11",
     "postcss": "^8.4.47",
+    "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.10"
   }
 }

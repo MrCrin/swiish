@@ -1,5 +1,5 @@
 # Build Stage
-FROM node:18-alpine as build
+FROM node:22-alpine as build
 WORKDIR /app
 
 # Install git to allow branch detection
@@ -22,7 +22,7 @@ RUN git config --global --add safe.directory /app
 RUN npm run build && rm -rf .git
 
 # Production Stage
-FROM node:18-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/src/active-branch.json ./active-branch.json
