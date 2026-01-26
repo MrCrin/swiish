@@ -1845,14 +1845,14 @@ const [settings, setSettings] = useState({
                  </button>
                </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="columns-1 md:columns-2 lg:columns-3 gap-6">
               {groupCardsByUser(cardList).map(user => {
                 // Filter out entries without slugs (these represent users without cards)
                 const userCards = user.cards.filter(c => c.slug);
                 const userKey = user.userId || user.userEmail || 'unknown';
                 
                 return (
-                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px] h-fit">
+                  <div key={userKey} className="bg-card dark:bg-card-dark rounded-card shadow-sm border border-border-subtle dark:border-border-dark hover:shadow-md transition-shadow flex flex-col p-[15px] h-fit break-inside-avoid mb-6">
                     {/* User Info Box (top) - only shown for owners */}
                     {userRole === 'owner' && user.userEmail && (
                       <div className="w-full mb-[15px]">
