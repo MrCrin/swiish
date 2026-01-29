@@ -819,6 +819,7 @@ async function generateGenericPreviewImage() {
 /**
  * Generate social media preview image (1200x630 PNG)
  * Includes card name, title, avatar, and theme color
+ * Uses image compositing instead of SVG embedding for better avatar rendering
  */
 async function generatePreviewImage(cardData, themeColor) {
   try {
@@ -835,53 +836,22 @@ async function generatePreviewImage(cardData, themeColor) {
     const width = 1200;
     const height = 630;
 
-    // Fetch avatar if available
-    let avatarBase64 = '';
-    if (avatarUrl) {
-      try {
-        const avatarBuffer = await fetchAvatarImage(avatarUrl);
-        if (avatarBuffer) {
-          const resized = await sharp(avatarBuffer)
-            .resize(200, 200, { fit: 'cover' })
-            .png()
-            .toBuffer();
-          avatarBase64 = resized.toString('base64');
-        }
-      } catch (err) {
-        console.warn('[Preview] Could not load avatar:', err.message);
-      }
-    }
-
-    // Build SVG with avatar if available
-    let svg = `
-      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    // Create base SVG without avatar (avatar will be composited separately)
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:${colorHex};stop-opacity:1" />
             <stop offset="100%" style="stop-color:${colorHex};stop-opacity:0.8" />
           </linearGradient>
-          <clipPath id="avatarClip">
-            <circle cx="100" cy="100" r="90" />
-          </clipPath>
         </defs>
 
         <!-- Background -->
         <rect width="${width}" height="${height}" fill="#ffffff"/>
 
-        <!-- Gradient overlay -->
+        <!-- Gradient overlay on left side -->
         <rect x="0" y="0" width="400" height="${height}" fill="url(#grad)"/>
 
-        <!-- Avatar -->
-    `;
-
-    if (avatarBase64) {
-      svg += `
-        <image x="100" y="315" width="200" height="200" xlink:href="data:image/png;base64,${avatarBase64}" clip-path="url(#avatarClip)"/>
-        <circle cx="200" cy="415" r="95" fill="none" stroke="${colorHex}" stroke-width="4" opacity="0.3"/>
-      `;
-    }
-
-    svg += `
         <!-- Name -->
         <text x="500" y="280" font-family="Arial, sans-serif" font-size="56" font-weight="bold" fill="#1f2937">
           ${escapedName}
@@ -897,9 +867,57 @@ async function generatePreviewImage(cardData, themeColor) {
       </svg>
     `;
 
-    return await sharp(Buffer.from(svg))
-      .png()
-      .toBuffer();
+    // Start with base image
+    let image = await sharp(Buffer.from(svg)).png().toBuffer();
+    let imageSharp = sharp(image);
+
+    // Add avatar if available
+    if (avatarUrl) {
+      try {
+        const avatarBuffer = await fetchAvatarImage(avatarUrl);
+        if (avatarBuffer) {
+          console.log('[Preview] Creating circular avatar mask...');
+
+          // Resize and create circular avatar
+          const avatarSize = 180;
+          const avatarCircle = await sharp(avatarBuffer)
+            .resize(avatarSize, avatarSize, { fit: 'cover' })
+            .composite([{
+              input: Buffer.from(`
+                <svg width="${avatarSize}" height="${avatarSize}">
+                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="white"/>
+                </svg>
+              `),
+              blend: 'dest-in'
+            }])
+            .png()
+            .toBuffer();
+
+          console.log('[Preview] Compositing avatar onto preview image...');
+
+          // Composite avatar onto main image at position (120, 330) - centered vertically
+          imageSharp = imageSharp.composite([
+            { input: avatarCircle, left: 120, top: 330 }
+          ]);
+
+          // Add a subtle border circle around avatar
+          const borderSvg = `
+            <svg width="180" height="180">
+              <circle cx="90" cy="90" r="88" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.4"/>
+            </svg>
+          `;
+          imageSharp = imageSharp.composite([
+            { input: Buffer.from(borderSvg), left: 120, top: 330 }
+          ]);
+
+          console.log('[Preview] Avatar composited successfully');
+        }
+      } catch (err) {
+        console.warn('[Preview] Could not composite avatar:', err.message);
+      }
+    }
+
+    return await imageSharp.png().toBuffer();
   } catch (err) {
     console.error('[Preview] Error generating preview image:', err.message);
     return null;
