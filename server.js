@@ -876,44 +876,38 @@ async function generatePreviewImage(cardData, themeColor) {
       try {
         const avatarBuffer = await fetchAvatarImage(avatarUrl);
         if (avatarBuffer) {
-          console.log('[Preview] Creating circular avatar mask...');
+          console.log('[Preview] Resizing avatar image...');
 
-          // Resize and create circular avatar
+          // Just resize the avatar - no mask, keep it simple
           const avatarSize = 180;
-          const avatarCircle = await sharp(avatarBuffer)
+          const resizedAvatar = await sharp(avatarBuffer)
             .resize(avatarSize, avatarSize, { fit: 'cover' })
-            .composite([{
-              input: Buffer.from(`
-                <svg width="${avatarSize}" height="${avatarSize}">
-                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="white"/>
-                </svg>
-              `),
-              blend: 'dest-in'
-            }])
             .png()
             .toBuffer();
 
-          console.log('[Preview] Compositing avatar onto preview image...');
+          console.log('[Preview] Compositing avatar onto preview image at position (120, 330)...');
 
-          // Composite avatar onto main image at position (120, 330) - centered vertically
-          imageSharp = imageSharp.composite([
-            { input: avatarCircle, left: 120, top: 330 }
-          ]);
+          // Composite avatar onto main image
+          const composites = [
+            { input: resizedAvatar, left: 120, top: 330 }
+          ];
 
-          // Add a subtle border circle around avatar
-          const borderSvg = `
-            <svg width="180" height="180">
-              <circle cx="90" cy="90" r="88" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.4"/>
+          // Add a subtle border circle around avatar using SVG
+          const borderSvg = Buffer.from(`
+            <svg width="180" height="180" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="90" cy="90" r="88" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.5"/>
             </svg>
-          `;
-          imageSharp = imageSharp.composite([
-            { input: Buffer.from(borderSvg), left: 120, top: 330 }
-          ]);
+          `);
+
+          composites.push({ input: borderSvg, left: 120, top: 330 });
+
+          // Apply all composites at once
+          imageSharp = imageSharp.composite(composites);
 
           console.log('[Preview] Avatar composited successfully');
         }
       } catch (err) {
-        console.warn('[Preview] Could not composite avatar:', err.message);
+        console.warn('[Preview] Could not composite avatar:', err.message, err.stack);
       }
     }
 
