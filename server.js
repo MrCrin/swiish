@@ -3753,6 +3753,8 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
         <meta name="robots" content="noindex, nofollow">
         <meta name="googlebot" content="noindex, nofollow">
       `;
+      // Remove existing title tag to prevent duplicates
+      html = html.replace(/<title>.*?<\/title>/i, '');
       // Insert before closing head tag
       return html.replace('</head>', robotsMeta + '</head>');
     }
@@ -3763,6 +3765,8 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
         <title>Card Preview</title>
         <meta name="robots" content="noindex, follow">
       `;
+      // Remove existing title tag to prevent duplicates
+      html = html.replace(/<title>.*?<\/title>/i, '');
       return html.replace('</head>', privateMeta + '</head>');
     }
 
@@ -3795,6 +3799,9 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
         <meta name="twitter:image" content="${previewUrl}">
         <meta name="robots" content="index, follow">
       `;
+
+    // Remove existing title tag to prevent duplicates
+    html = html.replace(/<title>.*?<\/title>/i, '');
 
     return html.replace('</head>', metaTags + '</head>');
   } catch (err) {
