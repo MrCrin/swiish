@@ -24,6 +24,10 @@ RUN npm run build && rm -rf .git
 # Production Stage
 FROM node:22-alpine
 WORKDIR /app
+
+# Install fonts for SVG text rendering in preview images
+RUN apk add --no-cache ttf-dejavu fontconfig
+
 COPY --from=build /app/build ./build
 COPY --from=build /app/src/active-branch.json ./active-branch.json
 COPY package*.json ./
