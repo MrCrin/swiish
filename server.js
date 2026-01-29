@@ -3699,19 +3699,44 @@ app.post('/api/qr/:identifier', publicReadLimiter, [
 app.use(errorHandler);
 
 // Helper function to inject meta tags for social media sharing
-async function injectMetaTags(html, cardSlug, cardIdentifier) {
-  // Try to find card by slug or short code
-  let cardRow = await new Promise((resolve, reject) => {
-    db.get(`
-      SELECT c.data, c.short_code
-      FROM cards c
-      WHERE c.short_code = ? OR LOWER(c.slug) = LOWER(?)
-      LIMIT 1
-    `, [cardIdentifier, cardSlug], (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
+async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
+  // cardIdentifier is what we use for lookups
+  // displayIdentifier is what we show in preview URLs (might include orgSlug for org-scoped)
+
+  // Try to find card by short_code, slug, or org-scoped combination
+  let cardRow;
+
+  // Check if it's an org-scoped lookup (contains /)
+  if (displayIdentifier.includes('/')) {
+    const [orgSlug, cardSlug] = displayIdentifier.split('/');
+    // Look up by organization + card slug
+    cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code
+        FROM cards c
+        JOIN users u ON c.user_id = u.id
+        JOIN organisations o ON u.organisation_id = o.id
+        WHERE LOWER(o.slug) = LOWER(?) AND LOWER(c.slug) = LOWER(?)
+        LIMIT 1
+      `, [orgSlug, cardSlug], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
     });
-  });
+  } else {
+    // Original logic for short code or slug lookup
+    cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code
+        FROM cards c
+        WHERE c.short_code = ? OR LOWER(c.slug) = LOWER(?)
+        LIMIT 1
+      `, [cardIdentifier, cardIdentifier], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
 
   if (!cardRow) {
     return html; // Card not found, return unmodified HTML
@@ -3750,7 +3775,9 @@ async function injectMetaTags(html, cardSlug, cardIdentifier) {
     const description = title ? `${title} at ${company}` : company || 'Digital Business Card';
 
     // Construct preview image URL
-    const previewUrl = `${APP_URL}/api/cards/${cardIdentifier}/preview.png`;
+    // Use short_code if available (globally unique), otherwise use the identifier
+    const previewIdentifier = cardRow.short_code || cardIdentifier;
+    const previewUrl = `${APP_URL}/api/cards/${previewIdentifier}/preview.png`;
 
     const metaTags = `
         <title>${fullName} - Digital Business Card</title>
@@ -3789,11 +3816,29 @@ app.get('*', publicReadLimiter, async (req, res, next) => {
     let html = await fs.promises.readFile(indexPath, 'utf8');
 
     // Try to detect card page and inject meta tags
-    // Patterns: /c/:slug or /cards/:slug or /s/:shortCode
-    const cardMatch = req.path.match(/^\/(?:c|cards|s)\/([a-zA-Z0-9-]+)(?:\/|$)/);
-    if (cardMatch) {
-      const identifier = cardMatch[1];
-      html = await injectMetaTags(html, identifier, identifier);
+    // Patterns:
+    // 1. /{shortCode} - 7 alphanumeric characters (primary)
+    // 2. /{orgSlug}/{cardSlug} - organization scoped
+    // 3. /{slug} - legacy pattern (deprecated but still supported)
+
+    const pathParts = req.path.slice(1).split('/').filter(p => p.length > 0);
+
+    // Pattern 1: Short code (7 characters exactly)
+    const isShortCode = pathParts.length === 1 && /^[a-zA-Z0-9]{7}$/.test(pathParts[0]);
+    if (isShortCode) {
+      const shortCode = pathParts[0];
+      html = await injectMetaTags(html, shortCode, shortCode);
+    }
+    // Pattern 2: Organization-scoped /{orgSlug}/{cardSlug}
+    else if (pathParts.length === 2) {
+      const [orgSlug, cardSlug] = pathParts;
+      // Look up by org + card slug combination
+      html = await injectMetaTags(html, cardSlug, `${orgSlug}/${cardSlug}`);
+    }
+    // Pattern 3: Legacy slug (anything that's not a short code and not org-scoped)
+    else if (pathParts.length === 1) {
+      const slug = pathParts[0];
+      html = await injectMetaTags(html, slug, slug);
     }
 
     // Inject nonce into script tags (case-insensitive to catch all variants)
