@@ -1619,10 +1619,11 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
   param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier')
 ], handleValidationErrors, async (req, res, next) => {
   try {
-    const identifier = req.params.identifier.toLowerCase();
+    const identifier = req.params.identifier; // Keep original case for short_code lookup
+    const identifierLower = identifier.toLowerCase(); // For slug lookup
 
-    // Check cache first
-    const cachedPath = resolveCachePath(identifier);
+    // Check cache first (use lowercase for cache key)
+    const cachedPath = resolveCachePath(identifierLower);
     if (cachedPath) {
       try {
         const stat = await fs.promises.stat(cachedPath);
@@ -1664,9 +1665,9 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
           SELECT c.data, c.short_code, c.slug, u.organisation_id
           FROM cards c
           JOIN users u ON c.user_id = u.id
-          WHERE LOWER(c.slug) = LOWER(?)
+          WHERE LOWER(c.slug) = ?
           LIMIT 1
-        `, [identifier], (err, row) => {
+        `, [identifierLower], (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
