@@ -44,6 +44,7 @@
     "react-dom": "^18.2.0",
     "react-phone-number-input": "^3.4.14",
     "react-router-dom": "^6.20.0",
+    "sharp": "^0.34.5",
     "sqlite3": "^5.1.6",
     "validator": "^13.11.0"
   },
