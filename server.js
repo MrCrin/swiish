@@ -876,30 +876,56 @@ async function generatePreviewImage(cardData, themeColor) {
       try {
         const avatarBuffer = await fetchAvatarImage(avatarUrl);
         if (avatarBuffer) {
-          console.log('[Preview] Resizing avatar image...');
+          console.log('[Preview] Processing avatar image...');
 
-          // Just resize the avatar - no mask, keep it simple
-          const avatarSize = 180;
+          // 25% bigger: 180 * 1.25 = 225
+          const avatarSize = 225;
+
+          // Center on canvas: (1200 - 225) / 2 = 487.5, (630 - 225) / 2 = 202.5
+          const avatarLeft = Math.round((width - avatarSize) / 2);
+          const avatarTop = Math.round((height - avatarSize) / 2);
+
+          // Resize and create circular avatar using SVG mask
+          // Create a white circle SVG that will be used as a mask
+          const circleMaskSvg = `
+            <svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <mask id="circleMask">
+                  <rect width="${avatarSize}" height="${avatarSize}" fill="white"/>
+                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="black"/>
+                </mask>
+              </defs>
+              <rect width="${avatarSize}" height="${avatarSize}" mask="url(#circleMask)" fill="white"/>
+            </svg>
+          `;
+
+          // Resize avatar and apply circular crop
           const resizedAvatar = await sharp(avatarBuffer)
             .resize(avatarSize, avatarSize, { fit: 'cover' })
+            .composite([
+              {
+                input: Buffer.from(circleMaskSvg),
+                blend: 'dest-in'
+              }
+            ])
             .png()
             .toBuffer();
 
-          console.log('[Preview] Compositing avatar onto preview image at position (120, 330)...');
+          console.log(`[Preview] Compositing circular avatar at position (${avatarLeft}, ${avatarTop})...`);
 
-          // Composite avatar onto main image
+          // Build composites array
           const composites = [
-            { input: resizedAvatar, left: 120, top: 330 }
+            { input: resizedAvatar, left: avatarLeft, top: avatarTop }
           ];
 
-          // Add a subtle border circle around avatar using SVG
+          // Add a subtle border circle around avatar
           const borderSvg = Buffer.from(`
-            <svg width="180" height="180" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="90" cy="90" r="88" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.5"/>
+            <svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2 - 2}" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.5"/>
             </svg>
           `);
 
-          composites.push({ input: borderSvg, left: 120, top: 330 });
+          composites.push({ input: borderSvg, left: avatarLeft, top: avatarTop });
 
           // Apply all composites at once
           imageSharp = imageSharp.composite(composites);
