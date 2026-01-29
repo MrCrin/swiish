@@ -1611,8 +1611,125 @@ app.get('/api/cards/short/:shortCode', cardReadLimiter, (req, res, next) => {
   });
 });
 
+// GET Card Preview Image (Social Media Meta Tag)
+// MUST come BEFORE org-scoped route so /preview.png matches before being interpreted as cardSlug
+// Supports both slug and short_code identifiers
+// Route pattern: /api/cards/:identifier/preview.png
+app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
+  param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier')
+], handleValidationErrors, async (req, res, next) => {
+  try {
+    const identifier = req.params.identifier.toLowerCase();
+
+    // Check cache first
+    const cachedPath = resolveCachePath(identifier);
+    if (cachedPath) {
+      try {
+        const stat = await fs.promises.stat(cachedPath);
+        // Check cache age (24 hours)
+        if (Date.now() - stat.mtimeMs < PREVIEW_CACHE_MAX_AGE) {
+          const cachedBuffer = await fs.promises.readFile(cachedPath);
+          res.set({
+            'Content-Type': 'image/png',
+            'Cache-Control': 'public, max-age=86400', // 24 hours
+            'ETag': `"${stat.mtime.getTime()}"`
+          });
+          return res.send(cachedBuffer);
+        }
+      } catch (err) {
+        // Cache miss or stat error, proceed to generate
+        if (err.code !== 'ENOENT') {
+          console.error('[Preview] Cache stat error:', err.message);
+        }
+      }
+    }
+
+    // Try to find card by short_code first (exact match)
+    let cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code, c.slug, u.organisation_id
+        FROM cards c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.short_code = ?
+      `, [identifier], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // If not found by short_code, try by slug (case-insensitive)
+    if (!cardRow) {
+      cardRow = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT c.data, c.short_code, c.slug, u.organisation_id
+          FROM cards c
+          JOIN users u ON c.user_id = u.id
+          WHERE LOWER(c.slug) = LOWER(?)
+          LIMIT 1
+        `, [identifier], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    }
+
+    if (!cardRow) {
+      console.log('[Preview] Card not found:', identifier);
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    let cardData;
+    try {
+      cardData = JSON.parse(cardRow.data);
+    } catch (e) {
+      console.error('[Preview] Failed to parse card data:', e.message);
+      return res.status(500).json({ error: 'Invalid card data' });
+    }
+
+    // Privacy Check: Return generic preview if card requires interaction or has obfuscation
+    const privacy = cardData.privacy || {};
+    if (privacy.requireInteraction || privacy.clientSideObfuscation) {
+      console.log('[Preview] Privacy protection active for:', identifier);
+      const genericImage = await generateGenericPreviewImage();
+      if (!genericImage) {
+        return res.status(500).json({ error: 'Failed to generate preview' });
+      }
+
+      res.set({
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=3600' // 1 hour for generic
+      });
+      return res.send(genericImage);
+    }
+
+    // Generate preview image
+    const themeColor = cardData.theme?.color || 'indigo';
+    const previewBuffer = await generatePreviewImage(cardData, themeColor);
+
+    if (!previewBuffer) {
+      console.error('[Preview] Failed to generate preview image');
+      return res.status(500).json({ error: 'Failed to generate preview' });
+    }
+
+    // Write to cache atomically
+    if (cachedPath) {
+      await writeToCacheAtomic(`preview_${identifier}.png`, previewBuffer);
+    }
+
+    // Return generated preview
+    res.set({
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=86400' // 24 hours
+    });
+    res.send(previewBuffer);
+  } catch (err) {
+    console.error('[Preview] Endpoint error:', err.message);
+    next(err);
+  }
+});
+
 // GET Org-scoped Card (Public endpoint - org slug + card slug)
-// MUST come after /api/cards/short/:shortCode
+// MUST come after /api/cards/short/:shortCode and /api/cards/:identifier/preview.png
 app.get('/api/cards/:orgSlug/:cardSlug', cardReadLimiter, [
   param('orgSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid org slug'),
   param('cardSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid card slug')
@@ -1942,122 +2059,6 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
     // Member provided userId - ignore it, they can only create for themselves
     // Or no userId provided - use current user
     proceedWithCardSave(req.user.id);
-  }
-});
-
-// GET Card Preview Image (Social Media Meta Tag)
-// Supports both slug and short_code identifiers
-// Route pattern: /api/cards/:identifier/preview.png
-app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
-  param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier')
-], handleValidationErrors, async (req, res, next) => {
-  try {
-    const identifier = req.params.identifier.toLowerCase();
-
-    // Check cache first
-    const cachedPath = resolveCachePath(identifier);
-    if (cachedPath) {
-      try {
-        const stat = await fs.promises.stat(cachedPath);
-        // Check cache age (24 hours)
-        if (Date.now() - stat.mtimeMs < PREVIEW_CACHE_MAX_AGE) {
-          const cachedBuffer = await fs.promises.readFile(cachedPath);
-          res.set({
-            'Content-Type': 'image/png',
-            'Cache-Control': 'public, max-age=86400', // 24 hours
-            'ETag': `"${stat.mtime.getTime()}"`
-          });
-          return res.send(cachedBuffer);
-        }
-      } catch (err) {
-        // Cache miss or stat error, proceed to generate
-        if (err.code !== 'ENOENT') {
-          console.error('[Preview] Cache stat error:', err.message);
-        }
-      }
-    }
-
-    // Try to find card by short_code first (exact match)
-    let cardRow = await new Promise((resolve, reject) => {
-      db.get(`
-        SELECT c.data, c.short_code, c.slug, u.organisation_id
-        FROM cards c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.short_code = ?
-      `, [identifier], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
-
-    // If not found by short_code, try by slug (case-insensitive)
-    if (!cardRow) {
-      cardRow = await new Promise((resolve, reject) => {
-        db.get(`
-          SELECT c.data, c.short_code, c.slug, u.organisation_id
-          FROM cards c
-          JOIN users u ON c.user_id = u.id
-          WHERE LOWER(c.slug) = LOWER(?)
-          LIMIT 1
-        `, [identifier], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
-    }
-
-    if (!cardRow) {
-      console.log('[Preview] Card not found:', identifier);
-      return res.status(404).json({ error: 'Card not found' });
-    }
-
-    let cardData;
-    try {
-      cardData = JSON.parse(cardRow.data);
-    } catch (e) {
-      console.error('[Preview] Failed to parse card data:', e.message);
-      return res.status(500).json({ error: 'Invalid card data' });
-    }
-
-    // Privacy Check: Return generic preview if card requires interaction or has obfuscation
-    const privacy = cardData.privacy || {};
-    if (privacy.requireInteraction || privacy.clientSideObfuscation) {
-      console.log('[Preview] Privacy protection active for:', identifier);
-      const genericImage = await generateGenericPreviewImage();
-      if (!genericImage) {
-        return res.status(500).json({ error: 'Failed to generate preview' });
-      }
-
-      res.set({
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=3600' // 1 hour for generic
-      });
-      return res.send(genericImage);
-    }
-
-    // Generate preview image
-    const themeColor = cardData.theme?.color || 'indigo';
-    const previewBuffer = await generatePreviewImage(cardData, themeColor);
-
-    if (!previewBuffer) {
-      console.error('[Preview] Failed to generate preview image');
-      return res.status(500).json({ error: 'Failed to generate preview' });
-    }
-
-    // Write to cache atomically
-    if (cachedPath) {
-      await writeToCacheAtomic(`preview_${identifier}.png`, previewBuffer);
-    }
-
-    // Return generated preview
-    res.set({
-      'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400' // 24 hours
-    });
-    res.send(previewBuffer);
-  } catch (err) {
-    console.error('[Preview] Endpoint error:', err.message);
-    next(err);
   }
 });
 
