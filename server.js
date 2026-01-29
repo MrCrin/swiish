@@ -725,17 +725,26 @@ const escapeXml = (str) => {
  */
 async function fetchAvatarImage(avatarUrl) {
   try {
+    if (!avatarUrl) {
+      console.log('[Preview] No avatar URL provided');
+      return null;
+    }
+
     // 1. Local Uploads with Path Validation
     if (avatarUrl.startsWith('/uploads/')) {
       const filename = path.basename(avatarUrl);
       const safePath = path.resolve(UPLOADS_DIR, filename);
       const resolvedUploads = path.resolve(UPLOADS_DIR);
 
+      console.log('[Preview] Attempting to load upload:', { avatarUrl, filename, safePath });
+
       if (!safePath.startsWith(resolvedUploads)) {
         console.warn('[Preview] Invalid upload path attempted:', avatarUrl);
         return null;
       }
-      return await fs.promises.readFile(safePath);
+      const buffer = await fs.promises.readFile(safePath);
+      console.log('[Preview] Avatar loaded successfully:', filename, 'size:', buffer.length, 'bytes');
+      return buffer;
     }
 
     // 2. Demo Images with Path Validation (Fixes V2 Vulnerability)
@@ -744,24 +753,29 @@ async function fetchAvatarImage(avatarUrl) {
       const safePath = path.resolve(__dirname, 'public', 'demo', filename);
       const resolvedDemo = path.resolve(__dirname, 'public', 'demo');
 
+      console.log('[Preview] Attempting to load demo:', { avatarUrl, filename, safePath });
+
       if (!safePath.startsWith(resolvedDemo)) {
         console.warn('[Preview] Invalid demo path attempted:', avatarUrl);
         return null;
       }
-      return await fs.promises.readFile(safePath);
+      const buffer = await fs.promises.readFile(safePath);
+      console.log('[Preview] Demo avatar loaded successfully:', filename, 'size:', buffer.length, 'bytes');
+      return buffer;
     }
 
     // 3. External URLs (Whitelisted) - with timeout
     if (avatarUrl.startsWith('http')) {
       // For now, we don't support external URLs in preview generation
       // This could be added with proper whitelist and timeout handling
-      console.warn('[Preview] External URLs not supported in preview generation');
+      console.warn('[Preview] External URLs not supported in preview generation:', avatarUrl);
       return null;
     }
 
+    console.warn('[Preview] Avatar URL format not recognized:', avatarUrl);
     return null;
   } catch (err) {
-    console.error('[Preview] Error fetching avatar:', err.message);
+    console.error('[Preview] Error fetching avatar:', err.message, 'for URL:', avatarUrl);
     return null;
   }
 }
@@ -1686,6 +1700,10 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
       console.error('[Preview] Failed to parse card data:', e.message);
       return res.status(500).json({ error: 'Invalid card data' });
     }
+
+    console.log('[Preview] Card data loaded for:', identifier);
+    console.log('[Preview] Card avatar URL:', cardData.images?.avatar || '(none)');
+    console.log('[Preview] Card name:', cardData.personal?.firstName, cardData.personal?.lastName);
 
     // Privacy Check: Return generic preview if card requires interaction or has obfuscation
     const privacy = cardData.privacy || {};
