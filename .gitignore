@@ -55,4 +55,5 @@ yarn-error.log*
 *.tmp
 *.temp
 .cache/
+cache/
 plans/

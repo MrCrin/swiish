@@ -18,6 +18,7 @@ const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const util = require('util');
 const { execSync } = require('child_process');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -162,6 +163,91 @@ function validateFilePath(filePath) {
   return resolvedPath;
 }
 
+// --- 1.5 PREVIEW IMAGE CACHE SETUP ---
+const PREVIEW_CACHE_DIR = path.join(__dirname, 'cache', 'previews');
+const PREVIEW_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+const PREVIEW_CACHE_MAX_SIZE_MB = 100;
+
+// Delete and recreate cache directory on startup to ensure fresh previews after code updates
+try {
+  if (fs.existsSync(PREVIEW_CACHE_DIR)) {
+    // Remove the entire directory recursively
+    fs.rmSync(PREVIEW_CACHE_DIR, { recursive: true, force: true });
+    console.log('[Cache] Deleted preview cache directory on startup');
+  }
+  // Recreate the directory fresh
+  fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true });
+  console.log('[Cache] Preview cache directory recreated fresh:', PREVIEW_CACHE_DIR);
+} catch (err) {
+  console.error('[Cache] CRITICAL - Failed to setup cache directory on startup:', err.message);
+  process.exit(1); // Fail hard if we can't setup cache - better than silently proceeding
+}
+
+/**
+ * Atomic write to cache to prevent race conditions (write-then-rename pattern)
+ */
+async function writeToCacheAtomic(filename, buffer) {
+  const tempPath = path.join(PREVIEW_CACHE_DIR, `${filename}.${Date.now()}.tmp`);
+  const finalPath = path.join(PREVIEW_CACHE_DIR, filename);
+
+  try {
+    await fs.promises.writeFile(tempPath, buffer);
+    await fs.promises.rename(tempPath, finalPath);
+    console.log('[Cache] Written atomically:', filename);
+  } catch (err) {
+    // Try to clean up temp file
+    try { await fs.promises.unlink(tempPath); } catch (e) {}
+    console.error('[Cache] Atomic write failed:', err.message);
+  }
+}
+
+/**
+ * Validate and resolve cache path (Path Traversal Protection)
+ */
+function resolveCachePath(identifier) {
+  // Allow alphanumeric and hyphens only
+  if (!identifier || !/^[a-zA-Z0-9-]+$/.test(identifier)) return null;
+
+  const filename = `preview_${identifier}.png`;
+  const resolvedPath = path.resolve(PREVIEW_CACHE_DIR, filename);
+  const resolvedCacheDir = path.resolve(PREVIEW_CACHE_DIR);
+
+  if (!resolvedPath.startsWith(resolvedCacheDir)) return null;
+
+  return resolvedPath;
+}
+
+/**
+ * Invalidate preview cache for a card (by slug and short_code)
+ */
+async function invalidatePreviewCache(slug, shortCode) {
+  const toDelete = [];
+
+  // Add slug to cache invalidation
+  if (slug) {
+    const slugPath = resolveCachePath(slug);
+    if (slugPath) toDelete.push(slugPath);
+  }
+
+  // Add short_code to cache invalidation
+  if (shortCode) {
+    const shortCodePath = resolveCachePath(shortCode);
+    if (shortCodePath) toDelete.push(shortCodePath);
+  }
+
+  // Delete cache files in parallel
+  for (const filePath of toDelete) {
+    try {
+      await fs.promises.unlink(filePath);
+      console.log('[Cache] Invalidated:', path.basename(filePath));
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error('[Cache] Invalidation error:', err.message);
+      }
+    }
+  }
+}
+
 // --- 2. SETUP DATABASE (SQLite) ---
 // Use separate database files for demo vs normal mode
 const DB_FILENAME = IS_DEMO_MODE ? 'cards-demo.db' : 'cards.db';
@@ -204,6 +290,36 @@ async function logAudit(eventType, entityType, entityId, entityData, performedBy
     );
   });
 }
+
+// Helper function to map theme color name to hex (for SVG icon theming)
+const getThemeColorHex = (colorName) => {
+  if (!colorName || typeof colorName !== 'string') {
+    return '#4f46e5'; // default to indigo
+  }
+
+  const normalizedColorName = colorName.toLowerCase().trim();
+  const colorMap = {
+    indigo: '#4f46e5',
+    blue: '#2563eb',
+    rose: '#e11d48',
+    emerald: '#059669',
+    slate: '#475569',
+    purple: '#7c3aed',
+    cyan: '#0891b2',
+    teal: '#0d9488',
+    orange: '#ea580c',
+    pink: '#db2777',
+    violet: '#7c3aed',
+    fuchsia: '#c026d3',
+    amber: '#d97706',
+    lime: '#65a30d',
+    green: '#16a34a',
+    yellow: '#ca8a04',
+    red: '#dc2626'
+  };
+
+  return colorMap[normalizedColorName] || '#4f46e5';
+};
 
 // Helper function to get default theme colours (hex-only format)
 const getDefaultThemeColors = () => [
@@ -595,6 +711,241 @@ const handleValidationErrors = (req, res, next) => {
   }
   next();
 };
+
+// --- PHASE 2: SECURE IMAGE GENERATION MODULE ---
+
+/**
+ * PROPER XML ESCAPING (Fixes V2 Vulnerability)
+ * Escapes special characters for safe use in SVG/XML contexts
+ */
+const escapeXml = (str) => {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
+/**
+ * Secure Avatar Fetching with Path Validation
+ * Prevents path traversal attacks by validating all paths
+ */
+async function fetchAvatarImage(avatarUrl) {
+  try {
+    if (!avatarUrl) {
+      console.log('[Preview] No avatar URL provided');
+      return null;
+    }
+
+    // 1. Local Uploads with Path Validation
+    if (avatarUrl.startsWith('/uploads/')) {
+      const filename = path.basename(avatarUrl);
+      const safePath = path.resolve(UPLOADS_DIR, filename);
+      const resolvedUploads = path.resolve(UPLOADS_DIR);
+
+      console.log('[Preview] Attempting to load upload:', { avatarUrl, filename, safePath });
+
+      if (!safePath.startsWith(resolvedUploads)) {
+        console.warn('[Preview] Invalid upload path attempted:', avatarUrl);
+        return null;
+      }
+      const buffer = await fs.promises.readFile(safePath);
+      console.log('[Preview] Avatar loaded successfully:', filename, 'size:', buffer.length, 'bytes');
+      return buffer;
+    }
+
+    // 2. Demo Images with Path Validation (Fixes V2 Vulnerability)
+    if (avatarUrl.startsWith('/demo/')) {
+      const filename = path.basename(avatarUrl);
+      const safePath = path.resolve(__dirname, 'public', 'demo', filename);
+      const resolvedDemo = path.resolve(__dirname, 'public', 'demo');
+
+      console.log('[Preview] Attempting to load demo:', { avatarUrl, filename, safePath });
+
+      if (!safePath.startsWith(resolvedDemo)) {
+        console.warn('[Preview] Invalid demo path attempted:', avatarUrl);
+        return null;
+      }
+      const buffer = await fs.promises.readFile(safePath);
+      console.log('[Preview] Demo avatar loaded successfully:', filename, 'size:', buffer.length, 'bytes');
+      return buffer;
+    }
+
+    // 3. External URLs (Whitelisted) - with timeout
+    if (avatarUrl.startsWith('http')) {
+      // For now, we don't support external URLs in preview generation
+      // This could be added with proper whitelist and timeout handling
+      console.warn('[Preview] External URLs not supported in preview generation:', avatarUrl);
+      return null;
+    }
+
+    console.warn('[Preview] Avatar URL format not recognized:', avatarUrl);
+    return null;
+  } catch (err) {
+    console.error('[Preview] Error fetching avatar:', err.message, 'for URL:', avatarUrl);
+    return null;
+  }
+}
+
+/**
+ * Generate a generic "Protected" preview image (for privacy-protected cards)
+ */
+async function generateGenericPreviewImage() {
+  const width = 1200;
+  const height = 630;
+
+  try {
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="${width}" height="${height}" fill="#f3f4f6"/>
+        <rect width="${width}" height="${height}" fill="url(#grad)" opacity="0.1"/>
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <text x="600" y="315" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="#6b7280">
+          Card Preview
+        </text>
+        <text x="600" y="370" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#9ca3af">
+          This card is private
+        </text>
+      </svg>
+    `;
+
+    return await sharp(Buffer.from(svg))
+      .png()
+      .toBuffer();
+  } catch (err) {
+    console.error('[Preview] Error generating generic preview:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Generate social media preview image (1200x630 PNG)
+ * Includes card name, title, avatar, and theme color
+ * Uses image compositing instead of SVG embedding for better avatar rendering
+ */
+async function generatePreviewImage(cardData, themeColor) {
+  try {
+    const firstName = cardData.personal?.firstName || '';
+    const lastName = cardData.personal?.lastName || '';
+    const title = cardData.personal?.title || '';
+    const avatarUrl = cardData.images?.avatar || '';
+
+    // Escape content for safe XML inclusion
+    const escapedName = escapeXml(`${firstName} ${lastName}`.trim());
+    const escapedTitle = escapeXml(title);
+    const escapedCompany = escapeXml(cardData.personal?.company || '');
+    const colorHex = getThemeColorHex(themeColor);
+
+    const width = 1200;
+    const height = 630;
+
+    // Create base SVG without avatar (avatar will be composited separately)
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:${colorHex};stop-opacity:1" />
+            <stop offset="100%" style="stop-color:${colorHex};stop-opacity:0.7" />
+          </linearGradient>
+        </defs>
+
+        <!-- Background -->
+        <rect width="${width}" height="${height}" fill="#ffffff"/>
+
+        <!-- Gradient overlay on left side -->
+        <rect x="0" y="0" width="400" height="${height}" fill="url(#grad)"/>
+
+        <!-- Name -->
+        <text x="500" y="260" font-family="Atkinson Hyperlegible" font-size="56" font-weight="bold" fill="#3d3d3d">
+          ${escapedName}
+        </text>
+
+        <!-- Title -->
+        <text x="500" y="330" font-family="Atkinson Hyperlegible" font-size="28" fill="#6b7280">
+          ${escapedTitle}
+        </text>
+
+        <!-- Accent line (same x positioning as text) -->
+        <rect x="500" y="358" width="100" height="6" fill="${colorHex}"/>
+
+        <!-- Company name -->
+        <text x="500" y="408" font-family="Atkinson Hyperlegible" font-size="28" fill="#6b7280">
+          ${escapedCompany}
+        </text>
+      </svg>
+    `;
+
+    // Start with base image
+    let image = await sharp(Buffer.from(svg)).png().toBuffer();
+    let imageSharp = sharp(image);
+
+    // Add avatar if available
+    if (avatarUrl) {
+      try {
+        const avatarBuffer = await fetchAvatarImage(avatarUrl);
+        if (avatarBuffer) {
+          console.log('[Preview] Processing avatar image...');
+
+          // 25% bigger: 180 * 1.25 = 225
+          const avatarSize = 250;
+
+          // Calculate position to center avatar in left half (400px wide)
+          const avatarLeft = Math.round((400 - avatarSize) / 2);
+          const avatarTop = Math.round((height - avatarSize) / 2);
+
+          // Resize and create circular avatar using SVG mask
+          // Create a circle SVG that will be used as a mask (white circle on black background = visible circle)
+          const circleMaskSvg = `
+            <svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <mask id="circleMask">
+                  <rect width="${avatarSize}" height="${avatarSize}" fill="black"/>
+                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="white"/>
+                </mask>
+              </defs>
+              <rect width="${avatarSize}" height="${avatarSize}" mask="url(#circleMask)" fill="white"/>
+            </svg>
+          `;
+
+          // Resize avatar and apply circular crop
+          const resizedAvatar = await sharp(avatarBuffer)
+            .resize(avatarSize, avatarSize, { fit: 'cover' })
+            .composite([
+              {
+                input: Buffer.from(circleMaskSvg),
+                blend: 'dest-in'
+              }
+            ])
+            .png()
+            .toBuffer();
+
+          console.log(`[Preview] Compositing circular avatar at position (${avatarLeft}, ${avatarTop})...`);
+
+          // Composite avatar onto main image (no border)
+          imageSharp = imageSharp.composite([
+            { input: resizedAvatar, left: avatarLeft, top: avatarTop }
+          ]);
+
+          console.log('[Preview] Avatar composited successfully');
+        }
+      } catch (err) {
+        console.warn('[Preview] Could not composite avatar:', err.message, err.stack);
+      }
+    }
+
+    return await imageSharp.png().toBuffer();
+  } catch (err) {
+    console.error('[Preview] Error generating preview image:', err.message);
+    return null;
+  }
+}
 
 // --- API ROUTES ---
 
@@ -1315,8 +1666,134 @@ app.get('/api/cards/short/:shortCode', cardReadLimiter, (req, res, next) => {
   });
 });
 
+// GET Card Preview Image (Social Media Meta Tag)
+// MUST come BEFORE org-scoped route so /preview.png matches before being interpreted as cardSlug
+// Supports both slug and short_code identifiers
+// Route pattern: /api/cards/:identifier/preview.png
+app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
+  param('identifier').trim().matches(/^[a-zA-Z0-9-]+$/).withMessage('Invalid identifier')
+], handleValidationErrors, async (req, res, next) => {
+  try {
+    const identifier = req.params.identifier; // Keep original case for short_code lookup
+    const identifierLower = identifier.toLowerCase(); // For slug lookup
+
+    // Check cache first (use lowercase for cache key)
+    const cachedPath = resolveCachePath(identifierLower);
+    if (cachedPath) {
+      try {
+        const stat = await fs.promises.stat(cachedPath);
+        // Check cache age (24 hours)
+        if (Date.now() - stat.mtimeMs < PREVIEW_CACHE_MAX_AGE) {
+          const cachedBuffer = await fs.promises.readFile(cachedPath);
+          res.set({
+            'Content-Type': 'image/png',
+            'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate with ETag
+            'ETag': `"${stat.mtime.getTime()}"`,
+            'Pragma': 'no-cache'
+          });
+          return res.send(cachedBuffer);
+        }
+      } catch (err) {
+        // Cache miss or stat error, proceed to generate
+        if (err.code !== 'ENOENT') {
+          console.error('[Preview] Cache stat error:', err.message);
+        }
+      }
+    }
+
+    // Try to find card by short_code first (exact match)
+    let cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code, c.slug, u.organisation_id
+        FROM cards c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.short_code = ?
+      `, [identifier], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // If not found by short_code, try by slug (case-insensitive)
+    if (!cardRow) {
+      cardRow = await new Promise((resolve, reject) => {
+        db.get(`
+          SELECT c.data, c.short_code, c.slug, u.organisation_id
+          FROM cards c
+          JOIN users u ON c.user_id = u.id
+          WHERE LOWER(c.slug) = ?
+          LIMIT 1
+        `, [identifierLower], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    }
+
+    if (!cardRow) {
+      console.log('[Preview] Card not found:', identifier);
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    let cardData;
+    try {
+      cardData = JSON.parse(cardRow.data);
+    } catch (e) {
+      console.error('[Preview] Failed to parse card data:', e.message);
+      return res.status(500).json({ error: 'Invalid card data' });
+    }
+
+    console.log('[Preview] Card data loaded for:', identifier);
+    console.log('[Preview] Card avatar URL:', cardData.images?.avatar || '(none)');
+    console.log('[Preview] Card name:', cardData.personal?.firstName, cardData.personal?.lastName);
+
+    // Privacy Check: Return generic preview if card requires interaction or has obfuscation
+    const privacy = cardData.privacy || {};
+    if (privacy.requireInteraction || privacy.clientSideObfuscation) {
+      console.log('[Preview] Privacy protection active for:', identifier);
+      const genericImage = await generateGenericPreviewImage();
+      if (!genericImage) {
+        return res.status(500).json({ error: 'Failed to generate preview' });
+      }
+
+      res.set({
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate
+        'Pragma': 'no-cache'
+      });
+      return res.send(genericImage);
+    }
+
+    // Generate preview image
+    const themeColor = cardData.theme?.color || 'indigo';
+    const previewBuffer = await generatePreviewImage(cardData, themeColor);
+
+    if (!previewBuffer) {
+      console.error('[Preview] Failed to generate preview image');
+      return res.status(500).json({ error: 'Failed to generate preview' });
+    }
+
+    // Write to cache atomically
+    if (cachedPath) {
+      await writeToCacheAtomic(`preview_${identifier}.png`, previewBuffer);
+    }
+
+    // Return generated preview
+    // Use must-revalidate to prevent Caddy from serving stale cached content
+    res.set({
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate with ETag
+      'Pragma': 'no-cache'
+    });
+    res.send(previewBuffer);
+  } catch (err) {
+    console.error('[Preview] Endpoint error:', err.message);
+    next(err);
+  }
+});
+
 // GET Org-scoped Card (Public endpoint - org slug + card slug)
-// MUST come after /api/cards/short/:shortCode
+// MUST come after /api/cards/short/:shortCode and /api/cards/:identifier/preview.png
 app.get('/api/cards/:orgSlug/:cardSlug', cardReadLimiter, [
   param('orgSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid org slug'),
   param('cardSlug').trim().matches(/^[a-z0-9-]+$/).withMessage('Invalid card slug')
@@ -1546,28 +2023,30 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
               WHERE slug = ? AND user_id = ?
             `;
 
-            db.run(query, [jsonContent, slug, finalTargetUserId], function(err) {
+            db.run(query, [jsonContent, slug, finalTargetUserId], async function(err) {
               if (err) return next(err);
+              await invalidatePreviewCache(slug, existingShortCode);
               res.json({ success: true, slug, shortCode: existingShortCode });
             });
           } else {
             // Card doesn't exist or has no short code, generate one
             ensureUniqueShortCode(db, (err, shortCode) => {
               if (err) return next(err);
-              
+
               const jsonContent = JSON.stringify(sanitizedData);
-              
+
               const query = `
-                INSERT INTO cards (slug, user_id, short_code, data, updated_at) 
+                INSERT INTO cards (slug, user_id, short_code, data, updated_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(slug, user_id) DO UPDATE SET 
-                  data = excluded.data, 
+                ON CONFLICT(slug, user_id) DO UPDATE SET
+                  data = excluded.data,
                   short_code = COALESCE(cards.short_code, excluded.short_code),
                   updated_at = CURRENT_TIMESTAMP
               `;
 
-              db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], function(err) {
+              db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], async function(err) {
                 if (err) return next(err);
+                await invalidatePreviewCache(slug, shortCode);
                 res.json({ success: true, slug, shortCode });
               });
             });
@@ -1593,28 +2072,30 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
             WHERE slug = ? AND user_id = ?
           `;
 
-          db.run(query, [jsonContent, slug, finalTargetUserId], function(err) {
+          db.run(query, [jsonContent, slug, finalTargetUserId], async function(err) {
             if (err) return next(err);
+            await invalidatePreviewCache(slug, existingShortCode);
             res.json({ success: true, slug, shortCode: existingShortCode });
           });
         } else {
           // Card doesn't exist or has no short code, generate one
           ensureUniqueShortCode(db, (err, shortCode) => {
             if (err) return next(err);
-            
+
             const jsonContent = JSON.stringify(sanitizedData);
-            
+
             const query = `
-              INSERT INTO cards (slug, user_id, short_code, data, updated_at) 
+              INSERT INTO cards (slug, user_id, short_code, data, updated_at)
               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(slug, user_id) DO UPDATE SET 
-                data = excluded.data, 
+              ON CONFLICT(slug, user_id) DO UPDATE SET
+                data = excluded.data,
                 short_code = COALESCE(cards.short_code, excluded.short_code),
                 updated_at = CURRENT_TIMESTAMP
             `;
 
-            db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], function(err) {
+            db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], async function(err) {
               if (err) return next(err);
+              await invalidatePreviewCache(slug, shortCode);
               res.json({ success: true, slug, shortCode });
             });
           });
@@ -1648,18 +2129,34 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
 // DELETE Card
 app.delete('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
   slugValidation
-], handleValidationErrors, (req, res, next) => {
+], handleValidationErrors, async (req, res, next) => {
   const slug = req.params.slug.toLowerCase();
   // Ensure user is authenticated and can only delete their own cards
   if (!req.user.id) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  db.run("DELETE FROM cards WHERE slug = ? AND user_id = ?", [slug, req.user.id], function(err) {
+
+  // First, fetch the card to get short_code for cache invalidation
+  db.get("SELECT short_code FROM cards WHERE slug = ? AND user_id = ?", [slug, req.user.id], (err, card) => {
     if (err) return next(err);
-    if (this.changes === 0) {
+    if (!card) {
       return res.status(404).json({ error: 'Card not found' });
     }
-    res.json({ success: true });
+
+    const shortCode = card.short_code;
+
+    // Now delete the card
+    db.run("DELETE FROM cards WHERE slug = ? AND user_id = ?", [slug, req.user.id], async function(err) {
+      if (err) return next(err);
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Card not found' });
+      }
+
+      // Invalidate cache for both slug and short_code
+      await invalidatePreviewCache(slug, shortCode);
+
+      res.json({ success: true });
+    });
   });
 });
 
@@ -1696,37 +2193,6 @@ const getOrganizationSettings = (organisationId, callback) => {
     
     callback(null, settings);
   });
-};
-
-// Helper function to map theme color name to hex (for SVG icon theming)
-const getThemeColorHex = (colorName) => {
-  if (!colorName || typeof colorName !== 'string') {
-    return '#4f46e5'; // default to indigo
-  }
-  
-  const normalizedColorName = colorName.toLowerCase().trim();
-  const colorMap = {
-    indigo: '#4f46e5',
-    blue: '#2563eb',
-    rose: '#e11d48',
-    emerald: '#059669',
-    slate: '#475569',
-    purple: '#7c3aed',
-    cyan: '#0891b2',
-    teal: '#0d9488',
-    orange: '#ea580c',
-    pink: '#db2777',
-    violet: '#7c3aed',
-    fuchsia: '#c026d3',
-    amber: '#d97706',
-    lime: '#65a30d',
-    green: '#16a34a',
-    yellow: '#ca8a04',
-    red: '#dc2626'
-  };
-  
-  const result = colorMap[normalizedColorName] || '#4f46e5'; // default to indigo
-  return result;
 };
 
 // GET Public Settings (theme_colors and theme_variant, no auth required)
@@ -3297,27 +3763,171 @@ app.post('/api/qr/:identifier', publicReadLimiter, [
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Helper function to inject meta tags for social media sharing
+async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
+  // cardIdentifier is what we use for lookups
+  // displayIdentifier is what we show in preview URLs (might include orgSlug for org-scoped)
+
+  // Try to find card by short_code, slug, or org-scoped combination
+  let cardRow;
+
+  // Check if it's an org-scoped lookup (contains /)
+  if (displayIdentifier.includes('/')) {
+    const [orgSlug, cardSlug] = displayIdentifier.split('/');
+    // Look up by organization + card slug
+    cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code, c.updated_at
+        FROM cards c
+        JOIN users u ON c.user_id = u.id
+        JOIN organisations o ON u.organisation_id = o.id
+        WHERE LOWER(o.slug) = LOWER(?) AND LOWER(c.slug) = LOWER(?)
+        LIMIT 1
+      `, [orgSlug, cardSlug], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  } else {
+    // Original logic for short code or slug lookup
+    cardRow = await new Promise((resolve, reject) => {
+      db.get(`
+        SELECT c.data, c.short_code, c.updated_at
+        FROM cards c
+        WHERE c.short_code = ? OR LOWER(c.slug) = LOWER(?)
+        LIMIT 1
+      `, [cardIdentifier, cardIdentifier], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
+  if (!cardRow) {
+    return html; // Card not found, return unmodified HTML
+  }
+
+  try {
+    const cardData = JSON.parse(cardRow.data);
+    const privacy = cardData.privacy || {};
+
+    // Privacy Leak Fix: "Block Robots" mode completely hides user identity
+    if (privacy.blockRobots) {
+      const robotsMeta = `
+        <title>Private Card</title>
+        <meta name="robots" content="noindex, nofollow">
+        <meta name="googlebot" content="noindex, nofollow">
+      `;
+      // Remove existing title tag to prevent duplicates
+      html = html.replace(/<title>.*?<\/title>/i, '');
+      // Insert before closing head tag
+      return html.replace('</head>', robotsMeta + '</head>');
+    }
+
+    // Privacy Check: Don't expose preview for cards requiring interaction
+    if (privacy.requireInteraction || privacy.clientSideObfuscation) {
+      const privateMeta = `
+        <title>Card Preview</title>
+        <meta name="robots" content="noindex, follow">
+      `;
+      // Remove existing title tag to prevent duplicates
+      html = html.replace(/<title>.*?<\/title>/i, '');
+      return html.replace('</head>', privateMeta + '</head>');
+    }
+
+    // Safe to include preview - construct meta tags
+    const firstName = escapeXml(cardData.personal?.firstName || '');
+    const lastName = escapeXml(cardData.personal?.lastName || '');
+    const title = escapeXml(cardData.personal?.title || '');
+    const company = escapeXml(cardData.personal?.company || '');
+    const fullName = `${firstName} ${lastName}`.trim();
+    const description = title ? `${title} at ${company}` : company || 'Digital Business Card';
+
+    // Construct preview image URL with cache-busting timestamp
+    // Use short_code if available (globally unique), otherwise use the identifier
+    const previewIdentifier = cardRow.short_code || cardIdentifier;
+    // Add timestamp hash to force refresh when card is updated
+    const updateTimestamp = cardRow.updated_at ? new Date(cardRow.updated_at).getTime() : Date.now();
+    const previewUrl = `${APP_URL}/api/cards/${previewIdentifier}/preview.png?v=${updateTimestamp}`;
+
+    // Construct canonical URL for og:url
+    const cardUrl = `${APP_URL}/${displayIdentifier}`;
+
+    const metaTags = `
+        <title>${fullName} - Digital Business Card</title>
+        <meta name="description" content="${description}">
+        <meta property="og:url" content="${cardUrl}">
+        <meta property="og:title" content="${fullName}">
+        <meta property="og:description" content="${description}">
+        <meta property="og:image" content="${previewUrl}">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:type" content="profile">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="${fullName}">
+        <meta name="twitter:description" content="${description}">
+        <meta name="twitter:image" content="${previewUrl}">
+        <meta name="robots" content="index, follow">
+      `;
+
+    // Remove existing title tag to prevent duplicates
+    html = html.replace(/<title>.*?<\/title>/i, '');
+
+    return html.replace('</head>', metaTags + '</head>');
+  } catch (err) {
+    console.error('[Meta Tags] Error parsing card data:', err.message);
+    return html; // Return unmodified on error
+  }
+}
+
 // SPA Fallback - only for non-API and non-static routes
 app.get('*', publicReadLimiter, async (req, res, next) => {
   // Don't serve index.html for static assets or API routes
   if (req.path.startsWith('/static/') || req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/manifest/') || req.path.startsWith('/icons/')) {
     return res.status(404).json({ error: 'Not found' });
   }
-  
+
   try {
     // Read index.html from build directory
     const indexPath = path.join(__dirname, 'build', 'index.html');
     let html = await fs.promises.readFile(indexPath, 'utf8');
-    
+
+    // Try to detect card page and inject meta tags
+    // Patterns:
+    // 1. /{shortCode} - 7 alphanumeric characters (primary)
+    // 2. /{orgSlug}/{cardSlug} - organization scoped
+    // 3. /{slug} - legacy pattern (deprecated but still supported)
+
+    const pathParts = req.path.slice(1).split('/').filter(p => p.length > 0);
+
+    // Pattern 1: Short code (7 characters exactly)
+    const isShortCode = pathParts.length === 1 && /^[a-zA-Z0-9]{7}$/.test(pathParts[0]);
+    if (isShortCode) {
+      const shortCode = pathParts[0];
+      html = await injectMetaTags(html, shortCode, shortCode);
+    }
+    // Pattern 2: Organization-scoped /{orgSlug}/{cardSlug}
+    else if (pathParts.length === 2) {
+      const [orgSlug, cardSlug] = pathParts;
+      // Look up by org + card slug combination
+      html = await injectMetaTags(html, cardSlug, `${orgSlug}/${cardSlug}`);
+    }
+    // Pattern 3: Legacy slug (anything that's not a short code and not org-scoped)
+    else if (pathParts.length === 1) {
+      const slug = pathParts[0];
+      html = await injectMetaTags(html, slug, slug);
+    }
+
     // Inject nonce into script tags (case-insensitive to catch all variants)
     html = html.replace(
       /<script(\s|>)/gi,
       `<script nonce="${res.locals.nonce}"$1`
     );
-    
+
     // Replace %PUBLIC_URL% if needed (React build should already handle this, but be safe)
     html = html.replace(/%PUBLIC_URL%/g, '');
-    
+
     // Set no-cache headers for index.html to ensure fresh content
     res.set({
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -3325,7 +3935,7 @@ app.get('*', publicReadLimiter, async (req, res, next) => {
       'Expires': '0',
       'Content-Type': 'text/html; charset=utf-8'
     });
-    
+
     res.send(html);
   } catch (err) {
     // If file doesn't exist or can't be read, return 404
