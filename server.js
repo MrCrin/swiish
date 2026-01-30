@@ -168,28 +168,19 @@ const PREVIEW_CACHE_DIR = path.join(__dirname, 'cache', 'previews');
 const PREVIEW_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 const PREVIEW_CACHE_MAX_SIZE_MB = 100;
 
-// Ensure cache directory exists
-if (!fs.existsSync(PREVIEW_CACHE_DIR)) {
-  fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true });
-  console.log('[Cache] Preview cache directory created:', PREVIEW_CACHE_DIR);
-}
-
-// Clear preview cache on startup to ensure fresh previews after code updates
+// Delete and recreate cache directory on startup to ensure fresh previews after code updates
 try {
-  const cacheFiles = fs.readdirSync(PREVIEW_CACHE_DIR);
-  if (cacheFiles.length > 0) {
-    cacheFiles.forEach(file => {
-      const filePath = path.join(PREVIEW_CACHE_DIR, file);
-      try {
-        fs.unlinkSync(filePath);
-      } catch (e) {
-        console.warn('[Cache] Could not delete cache file:', file);
-      }
-    });
-    console.log(`[Cache] Cleared ${cacheFiles.length} preview cache files on startup`);
+  if (fs.existsSync(PREVIEW_CACHE_DIR)) {
+    // Remove the entire directory recursively
+    fs.rmSync(PREVIEW_CACHE_DIR, { recursive: true, force: true });
+    console.log('[Cache] Deleted preview cache directory on startup');
   }
+  // Recreate the directory fresh
+  fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true });
+  console.log('[Cache] Preview cache directory recreated fresh:', PREVIEW_CACHE_DIR);
 } catch (err) {
-  console.warn('[Cache] Could not clear preview cache on startup:', err.message);
+  console.error('[Cache] CRITICAL - Failed to setup cache directory on startup:', err.message);
+  process.exit(1); // Fail hard if we can't setup cache - better than silently proceeding
 }
 
 /**
@@ -1696,8 +1687,9 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
           const cachedBuffer = await fs.promises.readFile(cachedPath);
           res.set({
             'Content-Type': 'image/png',
-            'Cache-Control': 'public, max-age=86400', // 24 hours
-            'ETag': `"${stat.mtime.getTime()}"`
+            'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate with ETag
+            'ETag': `"${stat.mtime.getTime()}"`,
+            'Pragma': 'no-cache'
           });
           return res.send(cachedBuffer);
         }
@@ -1766,7 +1758,8 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
 
       res.set({
         'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=3600' // 1 hour for generic
+        'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate
+        'Pragma': 'no-cache'
       });
       return res.send(genericImage);
     }
@@ -1786,9 +1779,11 @@ app.get('/api/cards/:identifier/preview.png', cardReadLimiter, [
     }
 
     // Return generated preview
+    // Use must-revalidate to prevent Caddy from serving stale cached content
     res.set({
       'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400' // 24 hours
+      'Cache-Control': 'public, max-age=0, must-revalidate', // Always revalidate with ETag
+      'Pragma': 'no-cache'
     });
     res.send(previewBuffer);
   } catch (err) {
