@@ -831,6 +831,7 @@ async function generatePreviewImage(cardData, themeColor) {
     // Escape content for safe XML inclusion
     const escapedName = escapeXml(`${firstName} ${lastName}`.trim());
     const escapedTitle = escapeXml(title);
+    const escapedCompany = escapeXml(cardData.personal?.company || '');
     const colorHex = getThemeColorHex(themeColor);
 
     const width = 1200;
@@ -842,7 +843,7 @@ async function generatePreviewImage(cardData, themeColor) {
         <defs>
           <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:${colorHex};stop-opacity:1" />
-            <stop offset="100%" style="stop-color:${colorHex};stop-opacity:0.8" />
+            <stop offset="100%" style="stop-color:${colorHex};stop-opacity:0.7" />
           </linearGradient>
         </defs>
 
@@ -853,17 +854,22 @@ async function generatePreviewImage(cardData, themeColor) {
         <rect x="0" y="0" width="400" height="${height}" fill="url(#grad)"/>
 
         <!-- Name -->
-        <text x="500" y="280" font-family="Arial, sans-serif" font-size="56" font-weight="bold" fill="#1f2937">
+        <text x="500" y="260" font-family="Atkinson Hyperlegible" font-size="56" font-weight="bold" fill="#3d3d3d">
           ${escapedName}
         </text>
 
         <!-- Title -->
-        <text x="500" y="350" font-family="Arial, sans-serif" font-size="28" fill="#6b7280">
+        <text x="500" y="330" font-family="Atkinson Hyperlegible" font-size="28" fill="#6b7280">
           ${escapedTitle}
         </text>
 
-        <!-- Accent line -->
-        <rect x="500" y="370" width="100" height="4" fill="${colorHex}"/>
+        <!-- Accent line (same x positioning as text) -->
+        <rect x="500" y="358" width="100" height="6" fill="${colorHex}"/>
+
+        <!-- Company name -->
+        <text x="500" y="408" font-family="Atkinson Hyperlegible" font-size="28" fill="#6b7280">
+          ${escapedCompany}
+        </text>
       </svg>
     `;
 
@@ -879,20 +885,20 @@ async function generatePreviewImage(cardData, themeColor) {
           console.log('[Preview] Processing avatar image...');
 
           // 25% bigger: 180 * 1.25 = 225
-          const avatarSize = 225;
+          const avatarSize = 250;
 
-          // Center on canvas: (1200 - 225) / 2 = 487.5, (630 - 225) / 2 = 202.5
-          const avatarLeft = Math.round((width - avatarSize) / 2);
+          // Calculate position to center avatar in left half (400px wide)
+          const avatarLeft = Math.round((400 - avatarSize) / 2);
           const avatarTop = Math.round((height - avatarSize) / 2);
 
           // Resize and create circular avatar using SVG mask
-          // Create a white circle SVG that will be used as a mask
+          // Create a circle SVG that will be used as a mask (white circle on black background = visible circle)
           const circleMaskSvg = `
             <svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <mask id="circleMask">
-                  <rect width="${avatarSize}" height="${avatarSize}" fill="white"/>
-                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="black"/>
+                  <rect width="${avatarSize}" height="${avatarSize}" fill="black"/>
+                  <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2}" fill="white"/>
                 </mask>
               </defs>
               <rect width="${avatarSize}" height="${avatarSize}" mask="url(#circleMask)" fill="white"/>
@@ -913,22 +919,10 @@ async function generatePreviewImage(cardData, themeColor) {
 
           console.log(`[Preview] Compositing circular avatar at position (${avatarLeft}, ${avatarTop})...`);
 
-          // Build composites array
-          const composites = [
+          // Composite avatar onto main image (no border)
+          imageSharp = imageSharp.composite([
             { input: resizedAvatar, left: avatarLeft, top: avatarTop }
-          ];
-
-          // Add a subtle border circle around avatar
-          const borderSvg = Buffer.from(`
-            <svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="${avatarSize/2}" cy="${avatarSize/2}" r="${avatarSize/2 - 2}" fill="none" stroke="${colorHex}" stroke-width="3" opacity="0.5"/>
-            </svg>
-          `);
-
-          composites.push({ input: borderSvg, left: avatarLeft, top: avatarTop });
-
-          // Apply all composites at once
-          imageSharp = imageSharp.composite(composites);
+          ]);
 
           console.log('[Preview] Avatar composited successfully');
         }
