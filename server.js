@@ -3850,9 +3850,13 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
     const updateTimestamp = cardRow.updated_at ? new Date(cardRow.updated_at).getTime() : Date.now();
     const previewUrl = `${APP_URL}/api/cards/${previewIdentifier}/preview.png?v=${updateTimestamp}`;
 
+    // Construct canonical URL for og:url
+    const cardUrl = `${APP_URL}/${displayIdentifier}`;
+
     const metaTags = `
         <title>${fullName} - Digital Business Card</title>
         <meta name="description" content="${description}">
+        <meta property="og:url" content="${cardUrl}">
         <meta property="og:title" content="${fullName}">
         <meta property="og:description" content="${description}">
         <meta property="og:image" content="${previewUrl}">
