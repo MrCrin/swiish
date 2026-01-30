@@ -174,6 +174,24 @@ if (!fs.existsSync(PREVIEW_CACHE_DIR)) {
   console.log('[Cache] Preview cache directory created:', PREVIEW_CACHE_DIR);
 }
 
+// Clear preview cache on startup to ensure fresh previews after code updates
+try {
+  const cacheFiles = fs.readdirSync(PREVIEW_CACHE_DIR);
+  if (cacheFiles.length > 0) {
+    cacheFiles.forEach(file => {
+      const filePath = path.join(PREVIEW_CACHE_DIR, file);
+      try {
+        fs.unlinkSync(filePath);
+      } catch (e) {
+        console.warn('[Cache] Could not delete cache file:', file);
+      }
+    });
+    console.log(`[Cache] Cleared ${cacheFiles.length} preview cache files on startup`);
+  }
+} catch (err) {
+  console.warn('[Cache] Could not clear preview cache on startup:', err.message);
+}
+
 /**
  * Atomic write to cache to prevent race conditions (write-then-rename pattern)
  */
@@ -3764,7 +3782,7 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
     // Look up by organization + card slug
     cardRow = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT c.data, c.short_code
+        SELECT c.data, c.short_code, c.updated_at
         FROM cards c
         JOIN users u ON c.user_id = u.id
         JOIN organisations o ON u.organisation_id = o.id
@@ -3779,7 +3797,7 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
     // Original logic for short code or slug lookup
     cardRow = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT c.data, c.short_code
+        SELECT c.data, c.short_code, c.updated_at
         FROM cards c
         WHERE c.short_code = ? OR LOWER(c.slug) = LOWER(?)
         LIMIT 1
@@ -3830,10 +3848,12 @@ async function injectMetaTags(html, cardIdentifier, displayIdentifier) {
     const fullName = `${firstName} ${lastName}`.trim();
     const description = title ? `${title} at ${company}` : company || 'Digital Business Card';
 
-    // Construct preview image URL
+    // Construct preview image URL with cache-busting timestamp
     // Use short_code if available (globally unique), otherwise use the identifier
     const previewIdentifier = cardRow.short_code || cardIdentifier;
-    const previewUrl = `${APP_URL}/api/cards/${previewIdentifier}/preview.png`;
+    // Add timestamp hash to force refresh when card is updated
+    const updateTimestamp = cardRow.updated_at ? new Date(cardRow.updated_at).getTime() : Date.now();
+    const previewUrl = `${APP_URL}/api/cards/${previewIdentifier}/preview.png?v=${updateTimestamp}`;
 
     const metaTags = `
         <title>${fullName} - Digital Business Card</title>
