@@ -202,7 +202,7 @@ const getDefaultTemplate = (settings) => ({
     phone: "",
     website: "",
   },
-  social: { linkedin: "", twitter: "", instagram: "", github: "" },
+  social: { linkedin: "", twitter: "", instagram: "", github: "", matrix: "" },
   theme: { color: "indigo", style: "modern" },
   images: { avatar: null, banner: null },
   links: [],
@@ -3202,6 +3202,7 @@ END:VCARD`;
            <SocialIcon url={social.twitter} icon={Twitter} label="X" themeColor={themeColor} />
            <SocialIcon url={social.instagram} icon={Instagram} label="Insta" themeColor={themeColor} />
            <SocialIcon url={social.github} icon={Github} label="Git" themeColor={themeColor} />
+           <SocialIcon url={social.matrix} icon={MessageCircle} label="Matrix" themeColor={themeColor} />
         </div>
 
         {/* Swiish logo */}
@@ -3390,6 +3391,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   <Input icon={Twitter} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
                   <Input icon={Instagram} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
                   <Input icon={Github} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
+                  <Input icon={MessageCircle} placeholder="Matrix share URL" value={data.social.matrix || ''} onChange={v => handleInputChange('social', 'matrix', v)} type="url" />
                 </div>
              </div>
            )}

@@ -19,6 +19,7 @@ const nodemailer = require('nodemailer');
 const util = require('util');
 const { execSync } = require('child_process');
 const sharp = require('sharp');
+const { normalizeMatrixUrl } = require('./matrix-url');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1384,6 +1385,10 @@ const cardDataValidation = [
     }
     return true;
   }),
+  body('social.matrix').optional().custom((value) => {
+    normalizeMatrixUrl(value);
+    return true;
+  }),
   body('links').optional().isArray().withMessage('Links must be an array'),
   body('links.*.title').optional().trim().isLength({ max: 200 }).withMessage('Link title too long'),
   body('links.*.url').optional().trim().custom((value) => {
@@ -1988,7 +1993,8 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       linkedin: (req.body.social?.linkedin || '').trim(),
       twitter: (req.body.social?.twitter || '').trim(),
       instagram: (req.body.social?.instagram || '').trim(),
-      github: (req.body.social?.github || '').trim()
+      github: (req.body.social?.github || '').trim(),
+      matrix: normalizeMatrixUrl(req.body.social?.matrix)
     },
     theme: req.body.theme || { color: 'indigo', style: 'modern' },
     images: {
