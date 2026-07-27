@@ -1,5 +1,5 @@
 {
-  "watch": ["src", "server.js"],
+  "watch": ["src", "server.js", "server"],
   "ext": "js,jsx,css,json",
   "ignore": ["build", "node_modules", "data", "uploads"],
   "exec": "npm run build",
