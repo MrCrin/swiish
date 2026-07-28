@@ -126,7 +126,7 @@ All configuration is done via environment variables. Copy `.env.example` to `.en
 - **`PORT`** - Server port (default: `3000`)
 - **`APP_URL`** - Base URL for the application (required in production)
 - **`ALLOWED_ORIGINS`** - Comma-separated list of allowed CORS origins
-- **`MAX_FILE_SIZE`** - Maximum file upload size in bytes (default: 5MB)
+- **`MAX_FILE_SIZE`** - Maximum file upload size in bytes (default: 5 MiB)
 - **`FORCE_HTTPS`** - Force HTTPS redirects (`true` or `false`)
 - **Email Configuration (SMTP)** - For email features like invitations
 
