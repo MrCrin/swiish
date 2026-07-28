@@ -38,13 +38,15 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 🔐 **Admin dashboard** - Manage all your cards, users, and organization settings from a central dashboard
 
 ## Demo
+
 Have a look at a working demo:
+
 - How your cards can look
-  - https://swiish-demo.up.railway.app/LINES02
-  - https://swiish-demo.up.railway.app/LEVEL03
-  - https://swiish-demo.up.railway.app/PLUMB05
+  - <https://swiish-demo.up.railway.app/LINES02>
+  - <https://swiish-demo.up.railway.app/LEVEL03>
+  - <https://swiish-demo.up.railway.app/PLUMB05>
 - How the admin dashboard looks (demo will bypass login)
-  - https://swiish-demo.up.railway.app/
+  - <https://swiish-demo.up.railway.app/>
 
 **Note**: The demo is reset hourly and doesn't include the setup process that runs when you first install Swiish.
 
@@ -64,6 +66,7 @@ See [DOCKER.md](DOCKER.md) for complete Docker setup instructions.
 #### Option 2: Manual Installation (For Development)
 
 1. Clone and install dependencies:
+
    ```bash
    git clone https://github.com/MrCrin/swiish.git
    cd swiish
@@ -71,17 +74,20 @@ See [DOCKER.md](DOCKER.md) for complete Docker setup instructions.
    ```
 
 2. Configure environment:
+
    ```bash
    cp .env.example .env
    # Edit .env
    ```
 
 3. Start development server:
+
    ```bash
    npm start  # React dev server on http://localhost:3000
    ```
 
 For production, build and serve:
+
    ```bash
    npm run build
    npm run serve  # Runs on PORT from .env, default 3000
@@ -178,6 +184,7 @@ For detailed theming instructions, see the [full documentation](https://github.c
 ### Local Development Setup
 
 1. Clone and install:
+
    ```bash
    git clone https://github.com/MrCrin/swiish.git
    cd swiish
@@ -185,12 +192,14 @@ For detailed theming instructions, see the [full documentation](https://github.c
    ```
 
 2. Set up environment:
+
    ```bash
    cp .env.example .env
    # Configure for development
    ```
 
 3. Start development server:
+
    ```bash
    npm run dev  # Runs build and server in watch mode
    ```

@@ -5,6 +5,7 @@
 Swiish allows you to host your own digital business cards. Create beautiful profiles, generate QR codes for instant sharing, and let people save your contact details directly to their phones.
 
 ### Features
+
 * 📱 **PWA Ready:** Install cards as native-like apps on mobile.
 * 🔲 **QR Codes:** Auto-generated QR codes for every card.
 * 🔒 **Privacy Controls:** Require interaction to reveal details or block bots.
@@ -39,10 +40,12 @@ services:
       - APP_URL=https://cards.yourdomain.com
 ```
 
-2. **Run it:**
+1. **Run it:**
+
 ```bash
 docker compose up -d
 ```
+
 3. **Access it:**
    Open `http://localhost:8095` in your browser. The application will guide you through the initial setup to create your organization and admin account.
 
@@ -64,6 +67,7 @@ You can configure Swiish using environment variables.
 | `FORCE_HTTPS` | Force HTTPS redirects. | `false` |
 
 #### Email Configuration (Optional)
+
 Required for sending invitations and password resets.
 
 | Variable | Description |
@@ -84,5 +88,6 @@ Persist these volumes to keep your data safe during updates:
 * `/app/uploads`: Stores user-uploaded avatars and banners.
 
 ### 🔗 Links
+
 * [Source Code on GitHub](https://github.com/MrCrin/swiish)
 * [Report an Issue](https://github.com/MrCrin/swiish/issues)
