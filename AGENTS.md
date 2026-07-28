@@ -38,29 +38,21 @@ swiish/
 
 ## 🔐 Environment Variables (`.env`)
 
-### Required
-
-| Variable | Example | Purpose |
-|----------|---------|---------|
-| `JWT_SECRET` | `$(openssl rand -base64 32)` | JWT token signing key |
-
-### Optional  
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `NODE_ENV` | `development` | Run mode (webpack optimization) |
-| `PORT` | `3000` | Express server listen port |
-| `APP_URL` | — *required in prod* | Base URL / domain for app |
-| `DEMO_MODE` | `false` | Enable demo data, skip login |
-| `MAX_FILE_SIZE` | `5242880` (5MB) | Upload limit bytes |
-| `FORCE_HTTPS` | — *blank = off* | Force HTTPS redirects in prod |
-| `ALLOWED_ORIGINS` | `localhost:3000,8095` | CORS origins list |
-| `JWT_EXPIRES_IN` | `24h` | JWT token lifetime |
-
-### Email (SMTP - optional)
-
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`  
-- `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`  
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `JWT_SECRET` | **Required.** Random string for signing sessions. | *None* |
+| `APP_URL` | The public URL of your instance. Crucial for QR codes. | `http://localhost:8095` |
+| `PORT` | Internal port the app listens on. | `3000` |
+| `NODE_ENV` | Environment mode. | `development` |
+| `JWT_EXPIRES_IN` | JWT token expiration time. | `24h` |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. | `http://localhost:3000,http://localhost:8095` |
+| `MAX_FILE_SIZE` | Max upload size in bytes. | `5242880` (5 MiB) |
+| `FORCE_HTTPS` | Force HTTPS redirects. | `false` |
+| `SMTP_HOST` | Hostname of your SMTP provider. | *None* |
+| `SMTP_PORT` | Port (e.g., 587 or 465). | *None* |
+| `SMTP_USER` | SMTP Username. | *None* |
+| `SMTP_PASSWORD` | SMTP Password. | *None* |
+| `SMTP_FROM` | "From" address for emails. | *None* |
 
 ---
 
@@ -78,6 +70,9 @@ npm run build && npm run serve  # Listens on PORT from .env or :3000 default
 
 # Database migrations before starting app  
 npm run migrate   
+
+# Delete all local data from dev environment
+npm run clean-data
 ```
 
 Note: Remind the user to format markdown files using the workspace recommended VSCode extensions.
@@ -116,8 +111,7 @@ Note: Remind the user to format markdown files using the workspace recommended V
 | File | Purpose |
 |------|---------|
 | `README.md` | Installation / quickstart / GitHub copy |
-| `DOCKER.md` | Docker deployment setup |
-| `.env.example` | All env var options documented here |  
+| `.env.example` | Example env vars for deployment |  
 | `CHANGELOG.md`, `CONTRIBUTING.md`, `TRADEMARKS.md` | Version history, contribution guidelines, legal notices  |
 
 ---

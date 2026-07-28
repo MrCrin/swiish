@@ -60,7 +60,7 @@
     "watch:server": "nodemon --watch server.js --watch server --exec \"node server.js\" --ignore build --ignore src",
     "dev": "concurrently \"npm run watch:build\" \"npm run watch:server\" --names \"BUILD,SERVER\" --prefix-colors \"cyan,yellow\"",
     "docker": "trap 'docker compose -f ./docker-compose-dev.yml down --remove-orphans' EXIT INT TERM; docker compose -f ./docker-compose.dev.yml up --remove-orphans",
-    "docker:clean": "rm -r ./data ./uploads",
+    "clean-data": "rm -r ./data ./uploads",
     "docker:update": "trap 'docker compose -f ./docker-compose.dev.yml down --remove-orphans' EXIT INT TERM; docker compose -f ./docker-compose.dev.yml up --build -V --remove-orphans",
     "docker:down": "docker compose -f ./docker-compose.dev.yml down --remove-orphans"
   },

@@ -63,33 +63,49 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) to keep our 
 
 You can also include a commit body with more details if needed - but don't feel obliged, just if it's helpful to 'future you' or others.
 
-### Local Setup
+## Local Setup
 
 1. Fork the repository.
 2. Clone your fork: `git clone https://github.com/your-username/swiish.git`
-3. Install dependencies: `npm install`
-4. Set up your environment: `cp .env.example .env`
-5. Run the development server: `npm run dev`
+3. Enter the directory: `cd swiish`
 
-#### Docker Alternative
+### Building and Testing Changes
 
-After step 2, use the following:
+#### Bare Metal
 
-```bash
-npm run docker
-```
+1. Install dependencies: `npm install`
+2. Set up your environment: `cp .env.dev .env`  
+(see [README.md](README.md#configuration) for env variables)
+3. Run the development server: `npm run dev`
 
-Reset the development data:
-
-```bash
-npm run docker:clean
-```
-
-Rebuild and run the development container from the current environment:
+Useful Commands:
 
 ```bash
-npm run docker:update
+# Full dev server: frontend + backend watch mode 
+npm run dev
+
+# Frontend only (localhost:3000) - no backend needed in some setups
+npm start
+
+# Production build and serve  
+npm run build && npm run serve  # Listens on PORT from .env or :3000 default
+
+# Database migrations before starting app  
+npm run migrate
+
+# Delete all local data from dev environment
+npm run clean-data
 ```
+
+Full list of `npm run` commands is under scripts in [package.json](package.json).
+
+#### Docker
+
+Run the container: `npm run docker`
+
+Reset the development data: `npm run clean-data`
+
+Rebuild and run the development container from the current environment: `npm run docker:update`
 
 ## Pull Request Process
 
@@ -99,12 +115,29 @@ npm run docker:update
 4. Provide a clear description of the changes in the PR body.
 5. Wait for a review.
 
+## Project Structure
+
+```
+swiish/
+├── src/              # React frontend components & entry points  
+│   ├── App.js       → Main component: route-based rendering
+│   ├── index.js     → ReactDOM.render + CSS import
+│   └── components/  ↓ Common UI, editor, public-card views
+├── server/           # Express API routes, middleware, services
+├── migrations/       # db-migrate versioned schema files (SQL)  
+├── public/          # Static assets served at "/" path + PWA manifest/SW
+├── fonts/           # Atkinson Hyperlegible OTFs for card readability
+└── server.js        → Express app entry point
+```
+
 ## Coding Standards
 
-* **Frontend**: We currently use a monolithic structure in [`src/App.js`](src/App.js). While we plan to modularize this in the future, please stick to the current pattern for now to maintain consistency.
-* **Styling**: Use Tailwind CSS for all styling.
-* **Backend**: Keep logic in [`server.js`](server.js) or appropriate modules if we start breaking it out.
-* **Database**: Use migrations for any schema changes (`npm run migrate`).
+| Layer | Guidelines |
+|-------|------------|
+| **Frontend** | Components live under `src/components/` organized by feature (e.g., `/editor/`, `/public-card/`). Keep each component focused and reuse common UI primitives from [`src/components/common/`](src/components/common). Routes are defined in [`src/App.js`](src/App.js) using react-router-dom. |
+| **Styling** | Use Tailwind CSS utility classes for all styling. Refer to [`tailwind.config.js`](tailwind.config.js) for available config (colors, fonts like Atkinson Hyperlegible). |
+| **Backend** | Routes and middleware are in `server/routes/` and `server/middleware/`. Business logic lives in `server/services/`. Entry point is [`server/index.js`](server/index.js) with configuration in `server/config/`. Keep concerns separated as the codebase grows. |
+| **Database** | Schema changes go through versioned migrations under `migrations/` (run via `npm run migrate`). See existing migration files for naming conventions and format. |
 
 ## Future: Testing
 
