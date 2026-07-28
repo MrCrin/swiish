@@ -67,6 +67,24 @@ You can also include a commit body with more details if needed - but don't feel 
 4.  Set up your environment: `cp .env.example .env`
 5.  Run the development server: `npm run dev`
 
+
+#### Docker Alternative
+
+After step 2, use the following:
+```bash
+npm run docker
+```
+
+Reset the development data:
+```bash
+npm run docker:clean
+```
+
+Rebuild and run the development container from the current environment:
+```bash
+npm run docker:update
+```
+
 ## Pull Request Process
 
 1.  Ensure your code follows the existing style.

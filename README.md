@@ -87,6 +87,25 @@ For production, build and serve:
    npm run serve  # Runs on PORT from .env, default 3000
    ```
 
+#### Option 3: Docker Development
+
+**Note: Ctrl+C to stop for the following commands:**
+
+For development with a container built and run in docker from your environment: 
+```bash
+npm run docker
+```
+
+Reset the development data:
+```bash
+npm run docker:clean
+```
+
+Rebuild and run the development container from the current environment:
+```bash
+npm run docker:update
+```
+
 ## Configuration
 
 All configuration is done via environment variables. Copy `.env.example` to `.env` and fill in your values.
