@@ -16,11 +16,10 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 ## Table of Contents
 
 - [Features](#features)
-- [Quick Start](#quick-start)
+- [Demo](#demo)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
-- [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
 - [Changelog](#changelog)
@@ -38,72 +37,51 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 🔐 **Admin dashboard** - Manage all your cards, users, and organization settings from a central dashboard
 
 ## Demo
+
 Have a look at a working demo:
+
 - How your cards can look
-  - https://swiish-demo.up.railway.app/LINES02
-  - https://swiish-demo.up.railway.app/LEVEL03
-  - https://swiish-demo.up.railway.app/PLUMB05
+    - <https://swiish-demo.up.railway.app/LINES02>
+    - <https://swiish-demo.up.railway.app/LEVEL03>
+    - <https://swiish-demo.up.railway.app/PLUMB05>
 - How the admin dashboard looks (demo will bypass login)
-  - https://swiish-demo.up.railway.app/
+    - <https://swiish-demo.up.railway.app/>
 
 **Note**: The demo is reset hourly and doesn't include the setup process that runs when you first install Swiish.
 
-## Quick Start
+## Installation
 
-### Prerequisites
+**Prerequisites:** Docker Compose
 
-- **For Docker deployment**: Docker and Docker Compose
-- **For local development**: Node.js 18+ and npm
+1. Download [docker-compose.yml](docker-compose.yml) and modify volume mounts to your liking.
+2. Download [.env.example](.env.example) and rename it `.env`
+3. Configure `.env` to your liking
+4. Run `docker compose up -d`.
 
-### Installation
+### Development
 
-#### Option 1: Docker Deployment (Recommended)
-
-See [DOCKER.md](DOCKER.md) for complete Docker setup instructions.
-
-#### Option 2: Manual Installation (For Development)
-
-1. Clone and install dependencies:
-   ```bash
-   git clone https://github.com/MrCrin/swiish.git
-   cd swiish
-   npm install
-   ```
-
-2. Configure environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env
-   ```
-
-3. Start development server:
-   ```bash
-   npm start  # React dev server on http://localhost:3000
-   ```
-
-For production, build and serve:
-   ```bash
-   npm run build
-   npm run serve  # Runs on PORT from .env, default 3000
-   ```
+See [CONTRIBUTING.md](CONTRIBUTING.md#local-setup) for instructions.
 
 ## Configuration
 
-All configuration is done via environment variables. Copy `.env.example` to `.env` and fill in your values.
+Configuration is done via environment variables. Copy `.env.example` to `.env` and fill in your values.
 
-### Required Variables
-
-- **`JWT_SECRET`** - Secret key for JWT token signing. Generate with: `openssl rand -base64 32`
-
-### Optional Variables
-
-- **`NODE_ENV`** - Environment mode (`development` or `production`)
-- **`PORT`** - Server port (default: `3000`)
-- **`APP_URL`** - Base URL for the application (required in production)
-- **`ALLOWED_ORIGINS`** - Comma-separated list of allowed CORS origins
-- **`MAX_FILE_SIZE`** - Maximum file upload size in bytes (default: 5MB)
-- **`FORCE_HTTPS`** - Force HTTPS redirects (`true` or `false`)
-- **Email Configuration (SMTP)** - For email features like invitations
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `JWT_SECRET` | **Required.** Random string for signing sessions. | *None* |
+| `APP_URL` | The public URL of your instance. Crucial for QR codes. | `http://localhost:8095` |
+| `PORT` | Internal port the app listens on. | `3000` |
+| `NODE_ENV` | Environment mode. | `development` |
+| `DEMO_MODE` | Disables auth and uses demo data. | `false` |
+| `JWT_EXPIRES_IN` | JWT token expiration time. | `24h` |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. | `http://localhost:3000,http://localhost:8095` |
+| `MAX_FILE_SIZE` | Max upload size in bytes. | `5242880` (5 MiB) |
+| `FORCE_HTTPS` | Force HTTPS redirects. | `false` |
+| `SMTP_HOST` | Hostname of your SMTP provider. | *None* |
+| `SMTP_PORT` | Port (e.g., 587 or 465). | *None* |
+| `SMTP_USER` | SMTP Username. | *None* |
+| `SMTP_PASSWORD` | SMTP Password. | *None* |
+| `SMTP_FROM` | "From" address for emails. | *None* |
 
 See `.env.example` for all available options and their descriptions.
 
@@ -137,8 +115,8 @@ Demo mode allows visitors to explore Swiish without requiring authentication or 
 
 - **Direct Link**: Share the card URL directly
 - **QR Code**: Click the share button on any card to generate a QR code
-  - **Simple Mode**: QR code contains just the card URL
-  - **Full Details Mode**: QR code contains vCard data for direct contact saving
+    - **Simple Mode**: QR code contains just the card URL
+    - **Full Details Mode**: QR code contains vCard data for direct contact saving
 
 ### Privacy Controls
 
@@ -154,64 +132,13 @@ Swiish features a powerful theming engine with design tokens for colors, texture
 
 For detailed theming instructions, see the [full documentation](https://github.com/MrCrin/swiish/wiki/Theming).
 
-## Development
-
-### Local Development Setup
-
-1. Clone and install:
-   ```bash
-   git clone https://github.com/MrCrin/swiish.git
-   cd swiish
-   npm install
-   ```
-
-2. Set up environment:
-   ```bash
-   cp .env.example .env
-   # Configure for development
-   ```
-
-3. Start development server:
-   ```bash
-   npm run dev  # Runs build and server in watch mode
-   ```
-
-### Project Structure
-
-```
-swiish/
-├── src/                    # React frontend
-│   ├── App.js             # Main application
-│   ├── index.js           # React entry point
-│   └── theme/             # Theming system
-├── public/                # Static assets
-├── server.js              # Express backend
-├── data/                  # SQLite database
-├── uploads/               # User uploads
-└── migrations/            # Database migrations
-```
-
-### Available Scripts
-
-- `npm start` - Start React development server
-- `npm run build` - Build production React app
-- `npm run serve` - Serve production build
-- `npm run dev` - Development mode with hot reload
-- `npm run migrate` - Run database migrations
-
 ## Contributing
 
-We welcome contributions!
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes and add tests
-4. Run the development server: `npm run dev`
-5. Submit a pull request
+We welcome contributions! Check out [CONTRIBUTING.md](CONTRIBUTING.md)!
 
 ## License
 
-This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the AGPL-3.0 License with a Trademark exception. For more information, see the [LICENSE.md](LICENSE) file for details.
 
 ## Changelog
 

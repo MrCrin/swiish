@@ -1,0 +1,16 @@
+{
+  "editor.indentSize": "tabSize",
+  "editor.tabSize": 4,
+  "editor.detectIndentation": true,
+  "editor.formatOnSave": true,
+  "markdownlint.config": {
+    "MD007": {
+      "indent": 4,
+    },
+    "MD033": {
+      "allowed_elements": [
+        "br",
+      ]
+    },
+  },
+}

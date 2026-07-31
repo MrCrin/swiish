@@ -30,7 +30,6 @@ uploads/*
 
 # IDE files
 .cursor/
-.vscode/
 .kilocode/
 .claude/
 .idea/

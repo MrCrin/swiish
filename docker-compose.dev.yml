@@ -1,0 +1,19 @@
+services:
+  swiish:
+    build:
+      context: .
+    container_name: swiish
+    restart: unless-stopped
+    ports:
+      - "8095:3000"
+    environment:
+      - JWT_SECRET=change-this-secret-in-production
+      - APP_URL=http://localhost:8095
+      - NODE_ENV=development
+      - PORT=3000
+      - JWT_EXPIRES_IN=1h
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8095
+      - MAX_FILE_SIZE=5242880
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads

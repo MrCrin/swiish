@@ -57,8 +57,12 @@
     "serve": "node server.js",
     "migrate": "db-migrate up",
     "watch:build": "nodemon --watch src --ext js,jsx,css --exec \"npm run build\" --ignore build",
-    "watch:server": "nodemon --watch server.js --exec \"node server.js\" --ignore build --ignore src",
-    "dev": "concurrently \"npm run watch:build\" \"npm run watch:server\" --names \"BUILD,SERVER\" --prefix-colors \"cyan,yellow\""
+    "watch:server": "nodemon --watch server.js --watch server --exec \"node server.js\" --ignore build --ignore src",
+    "dev": "concurrently \"npm run watch:build\" \"npm run watch:server\" --names \"BUILD,SERVER\" --prefix-colors \"cyan,yellow\"",
+    "docker": "trap 'docker compose -f ./docker-compose-dev.yml down --remove-orphans' EXIT INT TERM; docker compose -f ./docker-compose.dev.yml up --remove-orphans",
+    "clean-data": "rm -r ./data ./uploads",
+    "docker:update": "trap 'docker compose -f ./docker-compose.dev.yml down --remove-orphans' EXIT INT TERM; docker compose -f ./docker-compose.dev.yml up --build -V --remove-orphans",
+    "docker:down": "docker compose -f ./docker-compose.dev.yml down --remove-orphans"
   },
   "browserslist": {
     "production": [
