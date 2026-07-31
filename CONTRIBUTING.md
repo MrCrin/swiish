@@ -117,23 +117,74 @@ Rebuild and run the development container from the current environment: `npm run
 
 ## Project Structure
 
+Copied from [AGENTS.md](AGENTS.md#-structure)
+
 ```
 swiish/
-├── src/              # React frontend components & entry points  
-│   ├── App.js       → Main component: route-based rendering
-│   ├── index.js     → ReactDOM.render + CSS import
-│   └── components/  ↓ Common UI, editor, public-card views
-├── server/           # Express API routes, middleware, services
-├── migrations/       # db-migrate versioned schema files (SQL)  
-├── public/          # Static assets served at "/" path + PWA manifest/SW
-├── fonts/           # Atkinson Hyperlegible OTFs for card readability
-└── server.js        → Express app entry point
+├── src/ # React frontend components & entry points
+│ ├── App.js → Main component: route-based rendering with react-router-dom
+│ ├── index.js → ReactDOM.createRoot + CSS imports (index.css)
+│ ├── components/ ↓ Feature modules organized by domain
+│ │ ├── common/ → Reusable UI primitives (Input, Modal, Toggle, ColorSelector...)
+│ │ ├── editor/ → Card editing interface with sortable links
+│ │ ├── invitations/ → Invitation acceptance UI
+│ │ ├── public-card/ → Generated contact card displays
+│ │ ├── settings/ → Platform configuration panel
+│ │ └── users/ → User management & invitation flows
+│ ├── constants/ → Shared constants: app config, color palettes, icon mappings
+│ ├── theme/ → Theme definitions (minimal.js, swiish.js)
+│ └── utils/ → Helper functions: card templates, QR encoding, sanitization
+├── server/ # Express backend: routes, middleware, services, utilities
+│ ├── index.js → App startup: migrations first, then HTTP listener with graceful shutdown
+│ ├── app.js → Central router composition; Helmet/CORS/security headers, middleware chain
+│ └── [subdirectories]/ ↓ Organized by concern
+│ ├── config/ → env.js (environment variables), security.js (CSP, corsOptions)
+│ ├── db/ → Database connection pool, migration runner (db-migrate)
+│ ├── lib/ → Utility modules: audit logging, demo mode checker, mailer, QR encoding, paths, tokens
+│ ├── middleware/ → auth.js (JWT verification + bcrypt), validation.js (AJV schemas + csurf), errorHandler
+│ ├── routes/ ↓ API endpoints grouped by resource (prefixed with /api)
+│ │ ├── admin → Admin dashboard operations
+│ │ ├── auth → Authentication (login, register)
+│ │ ├── cards → Contact card CRUD + public URL generation (/c/{token})
+│ │ ├── invitations → Invitation management
+│ │ ├── pwa → Service worker registration & PWA assets
+│ │ ├── qr → QR code generation endpoints
+│ │ ├── settings → Platform-wide settings
+│ │ ├── spa → SPA fallback routing
+│ │ └── uploads → File upload handling (multer) + public static serving
+│ └── services/ ↓ Business logic layers (extracted from routes)
+│ ├── cardService.js → Card data operations
+│ └── settingsService.js → Settings data operations
+├── migrations/ # db-migrate versioned schema files
+│ ├── 2025MMDDHHMMSS-description.js → Migration wrapper with .up()/.down() lifecycle
+│ └── sqls/ ↓ Raw SQL for each migration step (up/down pairs)
+├── public/ # Static assets served at "/" path + PWA support
+│ ├── index.html → SPA entry point (React Router mounts here)
+│ ├── manifest.json → PWA manifest for installability
+│ ├── service-worker.js → Offline caching strategy for card assets
+│ └── demo/ ↓ Placeholder assets for testing UI without uploads
+│ ├── demo/avatar-*.jpg → Placeholder avatars
+│ └── demo/banner-*.jpg → Placeholder banners
+├── scripts/ # Build-time utilities (Node.js scripts)
+│ ├── capture-git-info.js → Embeds git commit hash in build metadata
+│ └── test-preview-security.js → Validates DOMPurify sanitization on uploaded previews
+├── data/ → SQLite database file (writable, persistent storage)
+├── uploads/ → Temporary file storage for user-uploaded images
+├── fonts/ → Atkinson Hyperlegible typeface for card text rendering
+│ ├── AtkinsonHyperlegible-Bold.otf → Headlines, emphasis text
+│ └── AtkinsonHyperlegible-Regular.otf → Body content via @font-face
+├── nodemon.json → Nodemon config: watch server/, auto-restart on changes
+├── docker-compose.*.yml → Container orchestration: dev/prod stacks + nginx proxy
+├── .env.dev → Default environment file for local development
+├── .env.example → Template for required environment variables
+├── .env → Working copy of .env.dev that takes effect on dev instances; NEVER commit to VCS
+└── .gitignore → Git ignore patterns for junk/temp files (data/, uploads/, .env)
 ```
 
 ## Coding Standards
 
 | Layer | Guidelines |
-|-------|------------|
+| ------- | ------------ |
 | **Frontend** | Components live under `src/components/` organized by feature (e.g., `/editor/`, `/public-card/`). Keep each component focused and reuse common UI primitives from [`src/components/common/`](src/components/common). Routes are defined in [`src/App.js`](src/App.js) using react-router-dom. |
 | **Styling** | Use Tailwind CSS utility classes for all styling. Refer to [`tailwind.config.js`](tailwind.config.js) for available config (colors, fonts like Atkinson Hyperlegible). |
 | **Backend** | Routes and middleware are in `server/routes/` and `server/middleware/`. Business logic lives in `server/services/`. Entry point is [`server/index.js`](server/index.js) with configuration in `server/config/`. Keep concerns separated as the codebase grows. |

@@ -72,6 +72,7 @@ Configuration is done via environment variables. Copy `.env.example` to `.env` a
 | `APP_URL` | The public URL of your instance. Crucial for QR codes. | `http://localhost:8095` |
 | `PORT` | Internal port the app listens on. | `3000` |
 | `NODE_ENV` | Environment mode. | `development` |
+| `DEMO_MODE` | Disables auth and uses demo data. | `false` |
 | `JWT_EXPIRES_IN` | JWT token expiration time. | `24h` |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. | `http://localhost:3000,http://localhost:8095` |
 | `MAX_FILE_SIZE` | Max upload size in bytes. | `5242880` (5 MiB) |
