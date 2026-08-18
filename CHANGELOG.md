@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Custom Link Icons**: Upload a custom image icon for each custom link in the card editor, in addition to the built-in icon set
+
 ## [0.6.0] - 2026-01-26
 
 ### Added

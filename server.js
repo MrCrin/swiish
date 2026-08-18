@@ -475,6 +475,17 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024; // 5MB default
 
+function sanitizeUploadUrl(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('/uploads/')) return '';
+  const filename = trimmed.slice('/uploads/'.length);
+  if (!filename || filename.includes('/') || filename.includes('\\') || filename.includes('..')) return '';
+  const ext = path.extname(filename).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(ext)) return '';
+  return `/uploads/${filename}`.slice(0, 500);
+}
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOADS_DIR);
@@ -1392,6 +1403,7 @@ const cardDataValidation = [
     }
     return true;
   }),
+  body('links.*.iconUrl').optional().trim().isLength({ max: 500 }).withMessage('Link icon URL too long'),
   body('images.avatar').optional().trim().isLength({ max: 500 }).withMessage('Avatar URL too long'),
   body('images.banner').optional().trim().isLength({ max: 500 }).withMessage('Banner URL too long'),
   body('privacy.requireInteraction').optional().isBoolean().withMessage('requireInteraction must be a boolean'),
@@ -1999,7 +2011,8 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       id: link.id || Date.now(),
       title: (link.title || '').trim().substring(0, 200),
       url: (link.url || '').trim(),
-      icon: link.icon || 'link'
+      icon: link.icon || 'link',
+      iconUrl: sanitizeUploadUrl(link.iconUrl)
     })).filter(link => link.url && validator.isURL(link.url, { protocols: ['http', 'https'] })),
     privacy: {
       requireInteraction: typeof req.body.privacy?.requireInteraction === 'boolean' ? req.body.privacy.requireInteraction : true,

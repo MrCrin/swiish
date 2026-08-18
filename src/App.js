@@ -187,6 +187,14 @@ const ICON_MAP = {
   globe: Globe
 };
 
+function LinkGlyph({ link, className = "w-5 h-5" }) {
+  if (link.iconUrl) {
+    return <img src={link.iconUrl} alt="" className={`${className} object-contain`} />;
+  }
+  const Icon = ICON_MAP[link.icon] || LinkIcon;
+  return <Icon className={`${className} text-text-secondary dark:text-text-secondary-dark`} />;
+}
+
 // --- DATA TEMPLATE ---
 const getDefaultTemplate = (settings) => ({
   personal: {
@@ -3157,7 +3165,7 @@ END:VCARD`;
                     }}
                   >
                     <div className="mr-4 p-2 bg-input-bg dark:bg-input-bg-dark rounded-container shadow-sm transition-transform link-icon-container">
-                      {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                      <LinkGlyph link={link} />
                     </div>
                     <span className="font-semibold text-sm flex-1">{sanitizeText(link.title || '')}</span>
                     <ExternalLink className="w-4 h-4 opacity-50" />
@@ -3186,7 +3194,7 @@ END:VCARD`;
                   }}
                 >
                   <div className="mr-4 p-2 bg-input-bg dark:bg-input-bg-dark rounded-container shadow-sm transition-transform link-icon-container">
-                    {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                    <LinkGlyph link={link} />
                   </div>
                   <span className="font-semibold text-sm flex-1">{link.title}</span>
                   <ExternalLink className="w-4 h-4 opacity-50" />
@@ -3238,34 +3246,51 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     setData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   };
 
+  const uploadImageFile = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_ENDPOINT}/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Token': csrfToken
+      },
+      body: formData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const { url } = await res.json();
+    return url;
+  };
+
   const handleImageUpload = async (type, e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch(`${API_ENDPOINT}/upload`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-CSRF-Token': csrfToken
-        },
-        body: formData
-      });
-      
-      if (res.ok) {
-        const { url } = await res.json();
-        setData(prev => ({ ...prev, images: { ...prev.images, [type]: url } }));
-      } else {
-        if (showAlert) showAlert('Upload failed', 'error');
-      }
+      const url = await uploadImageFile(file);
+      setData(prev => ({ ...prev, images: { ...prev.images, [type]: url } }));
     } catch (error) {
-      if (showAlert) showAlert('Upload error', 'error');
+      if (showAlert) showAlert('Upload failed', 'error');
     } finally {
       setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleLinkIconUpload = async (id, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadImageFile(file);
+      updateLink(id, 'iconUrl', url);
+    } catch (error) {
+      if (showAlert) showAlert('Upload failed', 'error');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -3277,7 +3302,8 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     setData(prev => ({ ...prev, links: prev.links.filter(l => l.id !== id) }));
   };
   const updateLink = (id, field, value) => {
-    setData(prev => ({ ...prev, links: prev.links.map(l => l.id === id ? { ...l, [field]: value } : l) }));
+    const patch = typeof field === 'object' ? field : { [field]: value };
+    setData(prev => ({ ...prev, links: prev.links.map(l => l.id === id ? { ...l, ...patch } : l) }));
   };
 
   const reorderLinks = (oldIndex, newIndex) => {
@@ -3414,8 +3440,8 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                         <div key={link.id} className="bg-surface dark:bg-surface-dark p-4 rounded-input border border-border dark:border-border-dark">
                           <div className="grid gap-3">
                             <div className="flex gap-3 items-center">
-                              <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0">
-                                {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                              <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0 overflow-hidden">
+                                <LinkGlyph link={link} />
                               </div>
                               <input type="text" value={link.title} disabled className="flex-1 bg-card dark:bg-surface-dark border border-border dark:border-border-dark text-text-muted dark:text-text-muted-dark rounded-input px-3 py-2 text-sm cursor-not-allowed" />
                             </div>
@@ -3432,6 +3458,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   </LockedOption>
                 ) : (
                 <div className="space-y-4">
+                    {isUploading && <div className="text-sm text-indigo-600 dark:text-indigo-400 animate-pulse">Uploading image...</div>}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                       <SortableContext items={data.links.map(link => link.id)} strategy={verticalListSortingStrategy}>
                         {data.links.map((link, index) => (
@@ -3478,9 +3505,13 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                                 </button>
                                 <div className="grid gap-3 pt-6">
                                   <div className="flex gap-3 items-center">
-                                    <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0">
-                                      {React.createElement(ICON_MAP[link.icon], { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
-                                    </div>
+                                    <label
+                                      htmlFor={`link-icon-upload-${link.id}`}
+                                      className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:border-action dark:hover:border-action-dark"
+                                      title="Upload custom icon"
+                                    >
+                                      <LinkGlyph link={link} />
+                                    </label>
                                     <input 
                                       type="text" 
                                       placeholder="Link Title (e.g. Download CV)"
@@ -3496,13 +3527,27 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                                     onChange={(e) => updateLink(link.id, 'url', e.target.value)}
                                     className="w-full bg-card dark:bg-surface-dark border border-border dark:border-border-dark text-text-primary dark:text-text-primary-dark rounded-input px-3 py-2 text-sm focus:outline-none focus:border-action dark:focus:border-action-dark"
                                   />
-                                  {/* Simple Icon Picker */}
+                                  <input
+                                    id={`link-icon-upload-${link.id}`}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    onChange={(e) => handleLinkIconUpload(link.id, e)}
+                                    className="hidden"
+                                  />
                                   <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                                    <label
+                                      htmlFor={`link-icon-upload-${link.id}`}
+                                      className={`p-2 rounded-button border flex-shrink-0 cursor-pointer transition-all ${link.iconUrl ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
+                                      title="Upload custom icon"
+                                    >
+                                      <Upload className="w-4 h-4" />
+                                    </label>
                                     {Object.keys(ICON_MAP).map(iconKey => (
                                       <button 
                                         key={iconKey}
-                                        onClick={() => updateLink(link.id, 'icon', iconKey)}
-                                        className={`p-2 rounded-button border flex-shrink-0 transition-all ${link.icon === iconKey ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
+                                        type="button"
+                                        onClick={() => updateLink(link.id, { icon: iconKey, iconUrl: '' })}
+                                        className={`p-2 rounded-button border flex-shrink-0 transition-all ${!link.iconUrl && link.icon === iconKey ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
                                         title={iconKey}
                                       >
                                         {React.createElement(ICON_MAP[iconKey], { className: "w-4 h-4" })}
