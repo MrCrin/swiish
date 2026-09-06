@@ -2060,6 +2060,8 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       // Remove custom images if not allowed
       sanitizedData.images.avatar = '';
       sanitizedData.images.banner = '';
+      // Remove custom link icon images too
+      sanitizedData.links = sanitizedData.links.map(link => ({ ...link, iconUrl: '' }));
     }
     
     // Enforce links customisation policy
