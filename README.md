@@ -8,6 +8,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Docker Image](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml/badge.svg)](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml)
+[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/MrCrin/swiish/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/MrCrin/swiish) [![SWH](https://archive.softwareheritage.org/badge/swh:1:dir:1b60cb79564cb6465957034a683fd4394202b2f8/)](https://archive.softwareheritage.org/swh:1:dir:1b60cb79564cb6465957034a683fd4394202b2f8;origin=https://github.com/MrCrin/swiish;visit=swh:1:snp:c8ef0e60221b65e8cd40ec9487ea525390a50029;anchor=swh:1:rev:099cb1e9a317de654892f5106aee7fd1ac436845)
 
 **Open-source digital business card platform with QR codes and PWA support**
 
@@ -32,6 +33,7 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 📱 **Progressive Web App (PWA)** - Install cards as apps on mobile devices for offline access
 - 🔲 **QR code generation** - Generate QR codes with simple URLs or full vCard contact information
 - 🔒 **Privacy controls** - Require interaction before revealing contact details, obfuscate contact info, and block search engines
+- 📨 **Send your details controls** - Per-card toggle for the visitor-facing "send your details" CTA, plus individual switches for WhatsApp, email, and drop-call channels
 - 📤 **File uploads** - Upload custom avatars, banner images, and link icons
 - 🌙 **Dark mode support** - Automatic dark mode with manual toggle
 - 📱 **Responsive design** - Works beautifully on desktop, tablet, and mobile
@@ -147,6 +149,19 @@ Each card supports three privacy options:
 - **Require Interaction**: Users must click "See my details" before contact info is revealed
 - **Client-Side Obfuscation**: Contact information is obfuscated in the HTML
 - **Block Robots**: Prevents search engines from indexing the card
+
+### Send Your Details Controls
+
+Each card's public page can show a "Send your details" CTA that lets visitors open
+WhatsApp, email, or a drop-call to reach the card owner. From the card editor's
+**Sharing** tab you can:
+
+- Turn the whole CTA on/off with a master switch
+- Independently enable/disable the WhatsApp, Email, and Drop call channels
+
+This is useful, for example, if you don't have a WhatsApp-capable number and want to
+disable just that channel while still allowing email or call. Organisation owners can
+lock these options for members via **Admin Settings → Send Your Details**.
 
 ### Theme Customization
 
