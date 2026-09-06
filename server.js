@@ -1116,6 +1116,7 @@ app.post('/api/setup/initialize', apiLimiter, csrfProtection, [
               await dbRun("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_image_customisation', 'true']);
               await dbRun("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_links_customisation', 'true']);
               await dbRun("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_privacy_customisation', 'true']);
+              await dbRun("INSERT INTO organisation_settings (organisation_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", [orgId, 'allow_send_details_customisation', 'true']);
             } catch (err) {
               return next(err);
             }
@@ -1429,7 +1430,11 @@ const cardDataValidation = [
   body('images.banner').optional().trim().isLength({ max: 500 }).withMessage('Banner URL too long'),
   body('privacy.requireInteraction').optional().isBoolean().withMessage('requireInteraction must be a boolean'),
   body('privacy.clientSideObfuscation').optional().isBoolean().withMessage('clientSideObfuscation must be a boolean'),
-  body('privacy.blockRobots').optional().isBoolean().withMessage('blockRobots must be a boolean')
+  body('privacy.blockRobots').optional().isBoolean().withMessage('blockRobots must be a boolean'),
+  body('sendDetails.enabled').optional().isBoolean().withMessage('sendDetails.enabled must be a boolean'),
+  body('sendDetails.whatsapp').optional().isBoolean().withMessage('sendDetails.whatsapp must be a boolean'),
+  body('sendDetails.email').optional().isBoolean().withMessage('sendDetails.email must be a boolean'),
+  body('sendDetails.call').optional().isBoolean().withMessage('sendDetails.call must be a boolean')
 ];
 
 // GET All Cards (Admin Dashboard)
@@ -2039,8 +2044,18 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       requireInteraction: typeof req.body.privacy?.requireInteraction === 'boolean' ? req.body.privacy.requireInteraction : true,
       clientSideObfuscation: typeof req.body.privacy?.clientSideObfuscation === 'boolean' ? req.body.privacy.clientSideObfuscation : false,
       blockRobots: typeof req.body.privacy?.blockRobots === 'boolean' ? req.body.privacy.blockRobots : false
+    },
+    sendDetails: {
+      enabled: typeof req.body.sendDetails?.enabled === 'boolean' ? req.body.sendDetails.enabled : true,
+      whatsapp: typeof req.body.sendDetails?.whatsapp === 'boolean' ? req.body.sendDetails.whatsapp : true,
+      email: typeof req.body.sendDetails?.email === 'boolean' ? req.body.sendDetails.email : true,
+      call: typeof req.body.sendDetails?.call === 'boolean' ? req.body.sendDetails.call : true
     }
   };
+
+  // Defaults used when a card-level setting group is locked by the organisation
+  const DEFAULT_PRIVACY = { requireInteraction: true, clientSideObfuscation: false, blockRobots: false };
+  const DEFAULT_SEND_DETAILS = { enabled: true, whatsapp: true, email: true, call: true };
 
   // Ensure user is authenticated
   if (!req.user.id || !req.user.organisationId) {
@@ -2091,113 +2106,35 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       sanitizedData.links = [];
     }
     
-    // Enforce privacy customisation policy
-    if (!orgSettings.allow_privacy_customisation) {
-      // Reset to default privacy settings if customisation not allowed
-      // Get existing card to preserve current privacy settings if they match defaults
-      db.get("SELECT data FROM cards WHERE slug = ? AND user_id = ?", [slug, finalTargetUserId], (err, existingCard) => {
-        if (err) return next(err);
-        
-        if (existingCard) {
-          try {
-            const existingData = JSON.parse(existingCard.data);
-            // Only reset if user tried to change privacy settings
-            const privacyChanged = 
-              (req.body.privacy?.requireInteraction !== undefined && 
-               req.body.privacy.requireInteraction !== existingData.privacy?.requireInteraction) ||
-              (req.body.privacy?.clientSideObfuscation !== undefined && 
-               req.body.privacy.clientSideObfuscation !== existingData.privacy?.clientSideObfuscation) ||
-              (req.body.privacy?.blockRobots !== undefined && 
-               req.body.privacy.blockRobots !== existingData.privacy?.blockRobots);
-            
-            if (privacyChanged) {
-              // Keep existing privacy settings (don't allow changes)
-              sanitizedData.privacy = existingData.privacy || {
-                requireInteraction: true,
-                clientSideObfuscation: false,
-                blockRobots: false
-              };
-            } else {
-              // No change attempted, use existing
-              sanitizedData.privacy = existingData.privacy || sanitizedData.privacy;
-            }
-          } catch (e) {
-            // If parsing fails, use defaults
-            sanitizedData.privacy = {
-              requireInteraction: true,
-              clientSideObfuscation: false,
-              blockRobots: false
-            };
-          }
-        } else {
-          // New card, use defaults
-          sanitizedData.privacy = {
-            requireInteraction: true,
-            clientSideObfuscation: false,
-            blockRobots: false
-          };
-        }
-        
-        // Check if card exists to get short code, or generate new one
-        db.get("SELECT short_code FROM cards WHERE slug = ? AND user_id = ?", [slug, finalTargetUserId], (err, existingCardWithCode) => {
-          if (err) return next(err);
-          
-          const existingShortCode = existingCardWithCode?.short_code;
-          
-          // If card exists with short code, use it; otherwise generate new one
-          if (existingShortCode) {
-            // Card exists with short code, just update data
-            const jsonContent = JSON.stringify(sanitizedData);
-            
-            const query = `
-              UPDATE cards 
-              SET data = ?, updated_at = CURRENT_TIMESTAMP
-              WHERE slug = ? AND user_id = ?
-            `;
+    // Enforce privacy / send-details customisation locks.
+    // When a group is locked by the organisation, the card keeps its existing stored
+    // values for that group (or the group's defaults for a brand-new card) regardless
+    // of what was submitted in this request.
+    const privacyLocked = !orgSettings.allow_privacy_customisation;
+    const sendDetailsLocked = !orgSettings.allow_send_details_customisation;
 
-            db.run(query, [jsonContent, slug, finalTargetUserId], async function(err) {
-              if (err) return next(err);
-              await invalidatePreviewCache(slug, existingShortCode);
-              res.json({ success: true, slug, shortCode: existingShortCode });
-            });
-          } else {
-            // Card doesn't exist or has no short code, generate one
-            ensureUniqueShortCode(db, (err, shortCode) => {
-              if (err) return next(err);
+    // Finishes sanitizedData (applying any locked-group overrides) and performs the
+    // insert/update. Shared by both the locked and unlocked paths below so the save
+    // logic only exists once.
+    const saveCard = (existingData) => {
+      if (privacyLocked) {
+        sanitizedData.privacy = existingData?.privacy || DEFAULT_PRIVACY;
+      }
+      if (sendDetailsLocked) {
+        sanitizedData.sendDetails = existingData?.sendDetails || DEFAULT_SEND_DETAILS;
+      }
 
-              const jsonContent = JSON.stringify(sanitizedData);
-
-              const query = `
-                INSERT INTO cards (slug, user_id, short_code, data, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(slug, user_id) DO UPDATE SET
-                  data = excluded.data,
-                  short_code = COALESCE(cards.short_code, excluded.short_code),
-                  updated_at = CURRENT_TIMESTAMP
-              `;
-
-              db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], async function(err) {
-                if (err) return next(err);
-                await invalidatePreviewCache(slug, shortCode);
-                res.json({ success: true, slug, shortCode });
-              });
-            });
-          }
-        });
-      });
-    } else {
-      // Privacy customisation allowed, save normally
       // Check if card exists to get short code, or generate new one
       db.get("SELECT short_code FROM cards WHERE slug = ? AND user_id = ?", [slug, finalTargetUserId], (err, existingCardWithCode) => {
         if (err) return next(err);
-        
+
         const existingShortCode = existingCardWithCode?.short_code;
-        
+
         // If card exists with short code, use it; otherwise generate new one
         if (existingShortCode) {
           // Card exists with short code, just update data
           const jsonContent = JSON.stringify(sanitizedData);
-          
+
           const query = `
             UPDATE cards 
             SET data = ?, updated_at = CURRENT_TIMESTAMP
@@ -2233,6 +2170,26 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
           });
         }
       });
+    };
+
+    if (privacyLocked || sendDetailsLocked) {
+      // Need the existing card's data to preserve locked group(s)
+      db.get("SELECT data FROM cards WHERE slug = ? AND user_id = ?", [slug, finalTargetUserId], (err, existingCard) => {
+        if (err) return next(err);
+
+        let existingData = null;
+        if (existingCard) {
+          try {
+            existingData = JSON.parse(existingCard.data);
+          } catch (e) {
+            existingData = null;
+          }
+        }
+
+        saveCard(existingData);
+      });
+    } else {
+      saveCard(null);
     }
     });
   };
@@ -2344,6 +2301,7 @@ const getOrganizationSettings = (organisationId, callback) => {
     if (settings.allow_image_customisation === undefined) settings.allow_image_customisation = true;
     if (settings.allow_links_customisation === undefined) settings.allow_links_customisation = true;
     if (settings.allow_privacy_customisation === undefined) settings.allow_privacy_customisation = true;
+    if (settings.allow_send_details_customisation === undefined) settings.allow_send_details_customisation = true;
     
     callback(null, settings);
   });
@@ -2455,6 +2413,9 @@ app.get('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, (r
     if (settings.allow_privacy_customisation === undefined) {
       settings.allow_privacy_customisation = true;
     }
+    if (settings.allow_send_details_customisation === undefined) {
+      settings.allow_send_details_customisation = true;
+    }
     
     log('GET /api/admin/settings - Returning settings', {
       organisationId: req.user.organisationId,
@@ -2465,6 +2426,7 @@ app.get('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, (r
         allow_image_customisation: settings.allow_image_customisation,
         allow_links_customisation: settings.allow_links_customisation,
         allow_privacy_customisation: settings.allow_privacy_customisation,
+        allow_send_details_customisation: settings.allow_send_details_customisation,
         theme_colors_count: settings.theme_colors?.length
       }
     });
@@ -2503,7 +2465,8 @@ app.post('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, c
   body('allow_theme_customisation').optional().isBoolean().withMessage('allow_theme_customisation must be a boolean'),
   body('allow_image_customisation').optional().isBoolean().withMessage('allow_image_customisation must be a boolean'),
   body('allow_links_customisation').optional().isBoolean().withMessage('allow_links_customisation must be a boolean'),
-  body('allow_privacy_customisation').optional().isBoolean().withMessage('allow_privacy_customisation must be a boolean')
+  body('allow_privacy_customisation').optional().isBoolean().withMessage('allow_privacy_customisation must be a boolean'),
+  body('allow_send_details_customisation').optional().isBoolean().withMessage('allow_send_details_customisation must be a boolean')
 ], handleValidationErrors, (req, res, next) => {
   // Ensure user is authenticated and has organization
   if (!req.user.organisationId) {
@@ -2517,7 +2480,8 @@ app.post('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, c
     allow_theme_customisation,
     allow_image_customisation,
     allow_links_customisation,
-    allow_privacy_customisation
+    allow_privacy_customisation,
+    allow_send_details_customisation
   } = req.body;
   
   log('POST /api/admin/settings - Received settings update', {
@@ -2527,6 +2491,7 @@ app.post('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, c
     allow_image_customisation,
     allow_links_customisation,
     allow_privacy_customisation,
+    allow_send_details_customisation,
   theme_variant,
     theme_colors_count: theme_colors?.length
   });
@@ -2621,6 +2586,7 @@ app.post('/api/admin/settings', requireAuth, requireRole('owner'), apiLimiter, c
   saveToggle('allow_image_customisation', allow_image_customisation);
   saveToggle('allow_links_customisation', allow_links_customisation);
   saveToggle('allow_privacy_customisation', allow_privacy_customisation);
+  saveToggle('allow_send_details_customisation', allow_send_details_customisation);
   
   // Wait for all database operations to complete before sending response
   Promise.all(promises)
@@ -4215,7 +4181,11 @@ async function seedDemoData() {
       { key: 'allow_theme_customisation', value: '1' },
       { key: 'allow_image_customisation', value: '1' },
       { key: 'allow_links_customisation', value: '1' },
-      { key: 'allow_privacy_customisation', value: '1' }
+      { key: 'allow_privacy_customisation', value: '1' },
+      // NOTE: getOrganizationSettings() parses allow_* values as `value === 'true'`, so
+      // the '1' values above actually evaluate to false for this demo org (pre-existing
+      // bug, out of scope here). Using 'true' for the new key to match the parser.
+      { key: 'allow_send_details_customisation', value: 'true' }
     ];
 
     for (const setting of settings) {

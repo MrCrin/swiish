@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Custom Link Icons**: Upload a custom image icon for each custom link in the card editor, in addition to the built-in icon set
+- **Send Your Details Controls**: Per-card toggles to enable/disable the "Send your details" CTA and each of its channels (WhatsApp, email, drop call), with a new organisation-level `allow_send_details_customisation` lock (mirrors the existing privacy customisation lock). Resolves #30.
 
 ## [0.6.0] - 2026-01-26
 

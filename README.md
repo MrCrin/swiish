@@ -33,6 +33,7 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 📱 **Progressive Web App (PWA)** - Install cards as apps on mobile devices for offline access
 - 🔲 **QR code generation** - Generate QR codes with simple URLs or full vCard contact information
 - 🔒 **Privacy controls** - Require interaction before revealing contact details, obfuscate contact info, and block search engines
+- 📨 **Send your details controls** - Per-card toggle for the visitor-facing "send your details" CTA, plus individual switches for WhatsApp, email, and drop-call channels
 - 📤 **File uploads** - Upload custom avatars, banner images, and link icons
 - 🌙 **Dark mode support** - Automatic dark mode with manual toggle
 - 📱 **Responsive design** - Works beautifully on desktop, tablet, and mobile
@@ -148,6 +149,19 @@ Each card supports three privacy options:
 - **Require Interaction**: Users must click "See my details" before contact info is revealed
 - **Client-Side Obfuscation**: Contact information is obfuscated in the HTML
 - **Block Robots**: Prevents search engines from indexing the card
+
+### Send Your Details Controls
+
+Each card's public page can show a "Send your details" CTA that lets visitors open
+WhatsApp, email, or a drop-call to reach the card owner. From the card editor's
+**Sharing** tab you can:
+
+- Turn the whole CTA on/off with a master switch
+- Independently enable/disable the WhatsApp, Email, and Drop call channels
+
+This is useful, for example, if you don't have a WhatsApp-capable number and want to
+disable just that channel while still allowing email or call. Organisation owners can
+lock these options for members via **Admin Settings → Send Your Details**.
 
 ### Theme Customization
 
