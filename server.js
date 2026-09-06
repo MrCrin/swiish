@@ -474,6 +474,18 @@ const { randomUUID } = require('crypto');
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024; // 5MB default
+const LINK_ICON_MAX_DIMENSION = 256;
+
+function sanitizeUploadUrl(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('/uploads/')) return '';
+  const filename = trimmed.slice('/uploads/'.length);
+  if (!filename || filename.includes('/') || filename.includes('\\') || filename.includes('..')) return '';
+  const ext = path.extname(filename).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(ext)) return '';
+  return `/uploads/${filename}`.slice(0, 500);
+}
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -1245,6 +1257,26 @@ app.post('/api/upload', requireAuth, uploadLimiter, csrfProtection, upload.singl
       return res.status(400).json({ error: 'File extension does not match file type' });
     }
 
+    // Link icons are rendered tiny (20x20px), so downscale large uploads to keep public pages fast
+    if (req.body.purpose === 'link-icon') {
+      const metadata = await sharp(filePath).metadata();
+      const isAnimatedGif = fileType.mime === 'image/gif' && (metadata.pages || 1) > 1;
+      const exceedsLimit = metadata.width > LINK_ICON_MAX_DIMENSION || metadata.height > LINK_ICON_MAX_DIMENSION;
+      if (isAnimatedGif || exceedsLimit) {
+        const formatByMime = {
+          'image/jpeg': 'jpeg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+          'image/gif': 'gif'
+        };
+        const resized = await sharp(filePath)
+          .resize(LINK_ICON_MAX_DIMENSION, LINK_ICON_MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+          .toFormat(formatByMime[fileType.mime])
+          .toBuffer();
+        await fs.promises.writeFile(filePath, resized);
+      }
+    }
+
     // Return the public URL
     res.json({ url: `/uploads/${req.file.filename}` });
   } catch (err) {
@@ -1392,6 +1424,7 @@ const cardDataValidation = [
     }
     return true;
   }),
+  body('links.*.iconUrl').optional().trim().isLength({ max: 500 }).withMessage('Link icon URL too long'),
   body('images.avatar').optional().trim().isLength({ max: 500 }).withMessage('Avatar URL too long'),
   body('images.banner').optional().trim().isLength({ max: 500 }).withMessage('Banner URL too long'),
   body('privacy.requireInteraction').optional().isBoolean().withMessage('requireInteraction must be a boolean'),
@@ -1999,7 +2032,8 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       id: link.id || Date.now(),
       title: (link.title || '').trim().substring(0, 200),
       url: (link.url || '').trim(),
-      icon: link.icon || 'link'
+      icon: link.icon || 'link',
+      iconUrl: sanitizeUploadUrl(link.iconUrl)
     })).filter(link => link.url && validator.isURL(link.url, { protocols: ['http', 'https'] })),
     privacy: {
       requireInteraction: typeof req.body.privacy?.requireInteraction === 'boolean' ? req.body.privacy.requireInteraction : true,
@@ -2047,6 +2081,8 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       // Remove custom images if not allowed
       sanitizedData.images.avatar = '';
       sanitizedData.images.banner = '';
+      // Remove custom link icon images too
+      sanitizedData.links = sanitizedData.links.map(link => ({ ...link, iconUrl: '' }));
     }
     
     // Enforce links customisation policy

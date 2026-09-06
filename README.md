@@ -32,7 +32,7 @@ Swiish is a self-hostable platform for creating and sharing digital business car
 - 📱 **Progressive Web App (PWA)** - Install cards as apps on mobile devices for offline access
 - 🔲 **QR code generation** - Generate QR codes with simple URLs or full vCard contact information
 - 🔒 **Privacy controls** - Require interaction before revealing contact details, obfuscate contact info, and block search engines
-- 📤 **File uploads** - Upload custom avatars and banner images
+- 📤 **File uploads** - Upload custom avatars, banner images, and link icons
 - 🌙 **Dark mode support** - Automatic dark mode with manual toggle
 - 📱 **Responsive design** - Works beautifully on desktop, tablet, and mobile
 - 🔐 **Admin dashboard** - Manage all your cards, users, and organization settings from a central dashboard
@@ -129,7 +129,7 @@ Demo mode allows visitors to explore Swiish without requiring authentication or 
 2. Log in to access the admin dashboard at `/admin`
 3. Click "Create New Card"
 4. Enter a unique slug (e.g., `john-doe`)
-5. Fill in your contact information, upload images, customize the theme
+5. Fill in your contact information, add custom links (with optional uploaded icons), upload images, customize the theme
 6. Click "Save"
 7. Your card is now available at `http://your-domain.com/john-doe`
 
