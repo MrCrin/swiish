@@ -474,6 +474,7 @@ const { randomUUID } = require('crypto');
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024; // 5MB default
+const LINK_ICON_MAX_DIMENSION = 256;
 
 function sanitizeUploadUrl(value) {
   if (!value || typeof value !== 'string') return '';
@@ -1254,6 +1255,26 @@ app.post('/api/upload', requireAuth, uploadLimiter, csrfProtection, upload.singl
         log('Failed to delete invalid file:', unlinkErr.message);
       }
       return res.status(400).json({ error: 'File extension does not match file type' });
+    }
+
+    // Link icons are rendered tiny (20x20px), so downscale large uploads to keep public pages fast
+    if (req.body.purpose === 'link-icon') {
+      const metadata = await sharp(filePath).metadata();
+      const isAnimatedGif = fileType.mime === 'image/gif' && (metadata.pages || 1) > 1;
+      const exceedsLimit = metadata.width > LINK_ICON_MAX_DIMENSION || metadata.height > LINK_ICON_MAX_DIMENSION;
+      if (isAnimatedGif || exceedsLimit) {
+        const formatByMime = {
+          'image/jpeg': 'jpeg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+          'image/gif': 'gif'
+        };
+        const resized = await sharp(filePath)
+          .resize(LINK_ICON_MAX_DIMENSION, LINK_ICON_MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+          .toFormat(formatByMime[fileType.mime])
+          .toBuffer();
+        await fs.promises.writeFile(filePath, resized);
+      }
     }
 
     // Return the public URL

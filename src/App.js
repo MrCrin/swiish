@@ -3256,9 +3256,10 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     setData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   };
 
-  const uploadImageFile = async (file) => {
+  const uploadImageFile = async (file, purpose) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (purpose) formData.append('purpose', purpose);
     const res = await fetch(`${API_ENDPOINT}/upload`, {
       method: 'POST',
       credentials: 'include',
@@ -3294,7 +3295,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
 
     setIsUploading(true);
     try {
-      const url = await uploadImageFile(file);
+      const url = await uploadImageFile(file, 'link-icon');
       updateLink(id, 'iconUrl', url);
     } catch (error) {
       if (showAlert) showAlert('Upload failed', 'error');
