@@ -188,8 +188,18 @@ const ICON_MAP = {
 };
 
 function LinkGlyph({ link, className = "w-5 h-5" }) {
-  if (link.iconUrl) {
-    return <img src={link.iconUrl} alt="" className={`${className} object-contain`} />;
+  const [failedIconUrl, setFailedIconUrl] = useState(null);
+  if (link.iconUrl && link.iconUrl !== failedIconUrl) {
+    return (
+      <img
+        src={link.iconUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailedIconUrl(link.iconUrl)}
+        className={`${className} object-contain`}
+      />
+    );
   }
   const Icon = ICON_MAP[link.icon] || LinkIcon;
   return <Icon className={`${className} text-text-secondary dark:text-text-secondary-dark`} />;
