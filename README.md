@@ -8,6 +8,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Docker Image](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml/badge.svg)](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml)
+[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/MrCrin/swiish/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/MrCrin/swiish) [![SWH](https://archive.softwareheritage.org/badge/swh:1:dir:1b60cb79564cb6465957034a683fd4394202b2f8/)](https://archive.softwareheritage.org/swh:1:dir:1b60cb79564cb6465957034a683fd4394202b2f8;origin=https://github.com/MrCrin/swiish;visit=swh:1:snp:c8ef0e60221b65e8cd40ec9487ea525390a50029;anchor=swh:1:rev:099cb1e9a317de654892f5106aee7fd1ac436845)
 
 **Open-source digital business card platform with QR codes and PWA support**
 
