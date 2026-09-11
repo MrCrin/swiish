@@ -81,7 +81,7 @@ Required for sending invitations and password resets.
 Persist these volumes to keep your data safe during updates:
 
 * `/app/data`: Stores the SQLite database (`cards.db`).
-* `/app/uploads`: Stores user-uploaded avatars and banners.
+* `/app/uploads`: Stores user-uploaded avatars, banners, and link icons.
 
 ### 🔗 Links
 * [Source Code on GitHub](https://github.com/MrCrin/swiish)
