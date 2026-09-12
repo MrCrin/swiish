@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Licensing**: Ship the complete, verbatim AGPL-3.0 text in `LICENSE.md` with a trade name exception notice linking to `TRADEMARKS.md`, replacing the abbreviated license file
+
 ## [0.7.0] - 2026-09-11
 
 ### Added
