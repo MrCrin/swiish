@@ -187,6 +187,24 @@ const ICON_MAP = {
   globe: Globe
 };
 
+function LinkGlyph({ link, className = "w-5 h-5" }) {
+  const [failedIconUrl, setFailedIconUrl] = useState(null);
+  if (link.iconUrl && link.iconUrl !== failedIconUrl) {
+    return (
+      <img
+        src={link.iconUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailedIconUrl(link.iconUrl)}
+        className={`${className} object-contain`}
+      />
+    );
+  }
+  const Icon = ICON_MAP[link.icon] || LinkIcon;
+  return <Icon className={`${className} text-text-secondary dark:text-text-secondary-dark`} />;
+}
+
 // --- DATA TEMPLATE ---
 const getDefaultTemplate = (settings) => ({
   personal: {
@@ -210,6 +228,12 @@ const getDefaultTemplate = (settings) => ({
     requireInteraction: true,  // ON by default
     clientSideObfuscation: false,  // OFF by default
     blockRobots: false  // OFF by default
+  },
+  sendDetails: {
+    enabled: true,  // ON by default (master switch)
+    whatsapp: true,  // ON by default
+    email: true,  // ON by default
+    call: true  // ON by default
   }
 });
 
@@ -2449,7 +2473,7 @@ function PublicCardRoute({ view, isPublicLoading, error, data, settings, darkMod
 }
 
 function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
-  const { personal = {}, contact = {}, social = {}, images = {}, theme = { color: 'indigo' }, links = [], privacy = {} } = data;
+  const { personal = {}, contact = {}, social = {}, images = {}, theme = { color: 'indigo' }, links = [], privacy = {}, sendDetails = {} } = data;
   const themeColor = settings?.theme_colors?.find(c => c.name === theme.color);
   const [showQR, setShowQR] = useState(false);
   const [qrMode, setQrMode] = useState(() => {
@@ -2492,7 +2516,16 @@ function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
     : null;
 
   const dropCallLink = ownerPhone ? `tel:${ownerPhone}` : null;
-  
+
+  // "Send your details" visibility, gated by per-card master + per-channel toggles.
+  // Use `!== false` so cards saved before this feature existed keep their current
+  // (fully enabled) behaviour.
+  const sendDetailsEnabled = sendDetails.enabled !== false;
+  const showWhatsappOption = sendDetailsEnabled && sendDetails.whatsapp !== false && !!whatsappLink;
+  const showEmailSendOption = sendDetailsEnabled && sendDetails.email !== false && !!emailLink;
+  const showDropCallOption = sendDetailsEnabled && sendDetails.call !== false && !!dropCallLink;
+  const showSendDetailsBlock = showWhatsappOption || showEmailSendOption || showDropCallOption;
+
   // Helper functions for obfuscation
   const obfuscateContact = (value) => {
     if (!value) return '';
@@ -2516,6 +2549,14 @@ function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
     document.body.classList.add(`theme-${variant}`);
     applyThemeCssVars(variant);
   }, [settings]);
+
+  // Collapse the send-options panel if the block becomes hidden (e.g. while editing
+  // toggles live in the editor preview) so it never opens onto an empty panel.
+  useEffect(() => {
+    if (!showSendDetailsBlock && showSendOptions) {
+      setShowSendOptions(false);
+    }
+  }, [showSendDetailsBlock, showSendOptions]);
   
   // UPDATED: Set Title
   useEffect(() => {
@@ -3073,56 +3114,58 @@ END:VCARD`;
         </div>
 
         {/* Send your details CTA */}
-        <div className="mb-8">
-          <button
-            type="button"
-            onClick={() => setShowSendOptions(open => !open)}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold bg-confirm text-confirm-text dark:bg-confirm-dark dark:text-confirm-text-dark hover:opacity-90 transition-colors shadow-lg active:scale-[0.98]"
-          >
-            <MessageCircle className="w-5 h-5" />
-            {showSendOptions ? 'Hide send options' : 'Send your details'}
-          </button>
+        {showSendDetailsBlock && (
+          <div className="mb-8">
+            <button
+              type="button"
+              onClick={() => setShowSendOptions(open => !open)}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold bg-confirm text-confirm-text dark:bg-confirm-dark dark:text-confirm-text-dark hover:opacity-90 transition-colors shadow-lg active:scale-[0.98]"
+            >
+              <MessageCircle className="w-5 h-5" />
+              {showSendOptions ? 'Hide send options' : 'Send your details'}
+            </button>
 
-          {showSendOptions && (
-            <div className="mt-3 space-y-2 rounded-card border border-border dark:border-border-dark bg-surface/60 dark:bg-card-dark/60 p-3 text-left">
-              {whatsappLink && (
-                <a
-                  href={whatsappLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-success dark:bg-success-dark text-white hover:bg-success-hover dark:hover:bg-success-hover-dark transition-colors"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  WhatsApp me your number
-                </a>
-              )}
+            {showSendOptions && (
+              <div className="mt-3 space-y-2 rounded-card border border-border dark:border-border-dark bg-surface/60 dark:bg-card-dark/60 p-3 text-left">
+                {showWhatsappOption && (
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-success dark:bg-success-dark text-white hover:bg-success-hover dark:hover:bg-success-hover-dark transition-colors"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    WhatsApp me your number
+                  </a>
+                )}
 
-              {emailLink && (
-                <a
-                  href={emailLink}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors border border-border dark:border-border-dark"
-                >
-                  <Mail className="w-5 h-5" />
-                  Email me your details
-                </a>
-              )}
+                {showEmailSendOption && (
+                  <a
+                    href={emailLink}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors border border-border dark:border-border-dark"
+                  >
+                    <Mail className="w-5 h-5" />
+                    Email me your details
+                  </a>
+                )}
 
-              {dropCallLink && (
-                <a
-                  href={dropCallLink}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors border border-border dark:border-border-dark"
-                >
-                  <Phone className="w-5 h-5" />
-                  Drop call me your number
-                </a>
-              )}
+                {showDropCallOption && (
+                  <a
+                    href={dropCallLink}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-semibold bg-surface dark:bg-surface-dark text-text-primary dark:text-text-primary-dark hover:bg-surface dark:hover:bg-surface-dark transition-colors border border-border dark:border-border-dark"
+                  >
+                    <Phone className="w-5 h-5" />
+                    Drop call me your number
+                  </a>
+                )}
 
-              <p className="mt-1 text-[11px] text-text-muted dark:text-text-muted-dark text-center">
-                Only shared with me, never sold.
-              </p>
-            </div>
-          )}
-        </div>
+                <p className="mt-1 text-[11px] text-text-muted dark:text-text-muted-dark text-center">
+                  Only shared with me, never sold.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {links.length > 0 && (
           <div className="flex flex-col gap-3 mb-8">
@@ -3157,7 +3200,7 @@ END:VCARD`;
                     }}
                   >
                     <div className="mr-4 p-2 bg-input-bg dark:bg-input-bg-dark rounded-container shadow-sm transition-transform link-icon-container">
-                      {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                      <LinkGlyph link={link} />
                     </div>
                     <span className="font-semibold text-sm flex-1">{sanitizeText(link.title || '')}</span>
                     <ExternalLink className="w-4 h-4 opacity-50" />
@@ -3186,7 +3229,7 @@ END:VCARD`;
                   }}
                 >
                   <div className="mr-4 p-2 bg-input-bg dark:bg-input-bg-dark rounded-container shadow-sm transition-transform link-icon-container">
-                    {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                    <LinkGlyph link={link} />
                   </div>
                   <span className="font-semibold text-sm flex-1">{link.title}</span>
                   <ExternalLink className="w-4 h-4 opacity-50" />
@@ -3238,34 +3281,52 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     setData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   };
 
+  const uploadImageFile = async (file, purpose) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (purpose) formData.append('purpose', purpose);
+    const res = await fetch(`${API_ENDPOINT}/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Token': csrfToken
+      },
+      body: formData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const { url } = await res.json();
+    return url;
+  };
+
   const handleImageUpload = async (type, e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch(`${API_ENDPOINT}/upload`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-CSRF-Token': csrfToken
-        },
-        body: formData
-      });
-      
-      if (res.ok) {
-        const { url } = await res.json();
-        setData(prev => ({ ...prev, images: { ...prev.images, [type]: url } }));
-      } else {
-        if (showAlert) showAlert('Upload failed', 'error');
-      }
+      const url = await uploadImageFile(file);
+      setData(prev => ({ ...prev, images: { ...prev.images, [type]: url } }));
     } catch (error) {
-      if (showAlert) showAlert('Upload error', 'error');
+      if (showAlert) showAlert('Upload failed', 'error');
     } finally {
       setIsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleLinkIconUpload = async (id, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadImageFile(file, 'link-icon');
+      updateLink(id, 'iconUrl', url);
+    } catch (error) {
+      if (showAlert) showAlert('Upload failed', 'error');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -3277,7 +3338,8 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
     setData(prev => ({ ...prev, links: prev.links.filter(l => l.id !== id) }));
   };
   const updateLink = (id, field, value) => {
-    setData(prev => ({ ...prev, links: prev.links.map(l => l.id === id ? { ...l, [field]: value } : l) }));
+    const patch = typeof field === 'object' ? field : { [field]: value };
+    setData(prev => ({ ...prev, links: prev.links.map(l => l.id === id ? { ...l, ...patch } : l) }));
   };
 
   const reorderLinks = (oldIndex, newIndex) => {
@@ -3342,7 +3404,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
 
         <div className="flex-1 p-6 space-y-8">
            <div className="flex p-1 bg-surface dark:bg-surface-dark rounded-input mb-6">
-              {['details', 'links', 'images', 'style', 'privacy'].map(tab => (
+              {['details', 'links', 'images', 'style', 'sharing', 'privacy'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2 text-sm font-medium rounded-button capitalize transition-all ${activeTab === tab ? 'bg-card dark:bg-surface-dark shadow text-text-primary dark:text-text-primary-dark' : 'text-text-muted dark:text-text-muted-dark hover:text-text-primary dark:hover:text-text-primary-dark'}`}>{tab}</button>
               ))}
            </div>
@@ -3414,8 +3476,8 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                         <div key={link.id} className="bg-surface dark:bg-surface-dark p-4 rounded-input border border-border dark:border-border-dark">
                           <div className="grid gap-3">
                             <div className="flex gap-3 items-center">
-                              <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0">
-                                {React.createElement(ICON_MAP[link.icon] || LinkIcon, { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
+                              <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0 overflow-hidden">
+                                <LinkGlyph link={link} />
                               </div>
                               <input type="text" value={link.title} disabled className="flex-1 bg-card dark:bg-surface-dark border border-border dark:border-border-dark text-text-muted dark:text-text-muted-dark rounded-input px-3 py-2 text-sm cursor-not-allowed" />
                             </div>
@@ -3432,6 +3494,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   </LockedOption>
                 ) : (
                 <div className="space-y-4">
+                    {isUploading && <div className="text-sm text-indigo-600 dark:text-indigo-400 animate-pulse">Uploading image...</div>}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                       <SortableContext items={data.links.map(link => link.id)} strategy={verticalListSortingStrategy}>
                         {data.links.map((link, index) => (
@@ -3478,9 +3541,13 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                                 </button>
                                 <div className="grid gap-3 pt-6">
                                   <div className="flex gap-3 items-center">
-                                    <div className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0">
-                                      {React.createElement(ICON_MAP[link.icon], { className: "w-5 h-5 text-text-secondary dark:text-text-secondary-dark" })}
-                                    </div>
+                                    <label
+                                      htmlFor={`link-icon-upload-${link.id}`}
+                                      className="w-10 h-10 rounded-container bg-card dark:bg-surface-dark border border-border dark:border-border-dark flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:border-action dark:hover:border-action-dark"
+                                      title="Upload custom icon"
+                                    >
+                                      <LinkGlyph link={link} />
+                                    </label>
                                     <input 
                                       type="text" 
                                       placeholder="Link Title (e.g. Download CV)"
@@ -3496,13 +3563,27 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                                     onChange={(e) => updateLink(link.id, 'url', e.target.value)}
                                     className="w-full bg-card dark:bg-surface-dark border border-border dark:border-border-dark text-text-primary dark:text-text-primary-dark rounded-input px-3 py-2 text-sm focus:outline-none focus:border-action dark:focus:border-action-dark"
                                   />
-                                  {/* Simple Icon Picker */}
+                                  <input
+                                    id={`link-icon-upload-${link.id}`}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    onChange={(e) => handleLinkIconUpload(link.id, e)}
+                                    className="hidden"
+                                  />
                                   <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                                    <label
+                                      htmlFor={`link-icon-upload-${link.id}`}
+                                      className={`p-2 rounded-button border flex-shrink-0 cursor-pointer transition-all ${link.iconUrl ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
+                                      title="Upload custom icon"
+                                    >
+                                      <Upload className="w-4 h-4" />
+                                    </label>
                                     {Object.keys(ICON_MAP).map(iconKey => (
                                       <button 
                                         key={iconKey}
-                                        onClick={() => updateLink(link.id, 'icon', iconKey)}
-                                        className={`p-2 rounded-button border flex-shrink-0 transition-all ${link.icon === iconKey ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
+                                        type="button"
+                                        onClick={() => updateLink(link.id, { icon: iconKey, iconUrl: '' })}
+                                        className={`p-2 rounded-button border flex-shrink-0 transition-all ${!link.iconUrl && link.icon === iconKey ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 dark:border-indigo-400 text-indigo-600 dark:text-indigo-300' : 'bg-card dark:bg-surface-dark border-border dark:border-border-dark text-text-muted-subtle dark:text-text-muted-dark hover:border-border dark:hover:border-border-dark'}`}
                                         title={iconKey}
                                       >
                                         {React.createElement(ICON_MAP[iconKey], { className: "w-4 h-4" })}
@@ -3576,6 +3657,21 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                    </div>
                  )}
                </div>
+            )}
+
+            {activeTab === 'sharing' && (
+              <div className="space-y-6">
+                {settings?.allow_send_details_customisation === false ? (
+                  <LockedOption message="Your organisation has disabled send-your-details customisation. This is controlled by your organisation.">
+                    <SendDetailsToggles data={data} onChange={() => {}} />
+                  </LockedOption>
+                ) : (
+                  <SendDetailsToggles
+                    data={data}
+                    onChange={(field, checked) => handleInputChange('sendDetails', field, checked)}
+                  />
+                )}
+              </div>
             )}
 
             {activeTab === 'privacy' && (
@@ -3710,6 +3806,56 @@ function Toggle({ label, description, checked, onChange }) {
             }`}
           />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function SendDetailsToggles({ data, onChange }) {
+  const sendDetails = data.sendDetails || {};
+  const masterEnabled = sendDetails.enabled ?? true;
+  const hasPhone = !!(data.contact?.phone || '').trim();
+
+  return (
+    <div className="space-y-6">
+      <Toggle
+        label="Send your details"
+        description="Shows a button on your public card that lets visitors send you their own contact details."
+        checked={masterEnabled}
+        onChange={(checked) => onChange('enabled', checked)}
+      />
+      <div className="h-px bg-border-subtle" />
+      <div className={`space-y-6 ${masterEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
+        <div>
+          <Toggle
+            label="WhatsApp"
+            description="Lets visitors open WhatsApp with a pre-filled message to your number. Requires a WhatsApp-capable phone number."
+            checked={sendDetails.whatsapp ?? true}
+            onChange={(checked) => onChange('whatsapp', checked)}
+          />
+          {!hasPhone && (
+            <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">Add a phone number in Details to use this.</p>
+          )}
+        </div>
+        <div className="h-px bg-border-subtle" />
+        <Toggle
+          label="Email"
+          description="Lets visitors open their email client with a pre-filled message to your email address."
+          checked={sendDetails.email ?? true}
+          onChange={(checked) => onChange('email', checked)}
+        />
+        <div className="h-px bg-border-subtle" />
+        <div>
+          <Toggle
+            label="Drop call"
+            description="Lets visitors call your number so you have a missed-call record of their number."
+            checked={sendDetails.call ?? true}
+            onChange={(checked) => onChange('call', checked)}
+          />
+          {!hasPhone && (
+            <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">Add a phone number in Details to use this.</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -4695,7 +4841,8 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
     allow_theme_customisation: settings.allow_theme_customisation !== undefined ? Boolean(settings.allow_theme_customisation) : true,
     allow_image_customisation: settings.allow_image_customisation !== undefined ? Boolean(settings.allow_image_customisation) : true,
     allow_links_customisation: settings.allow_links_customisation !== undefined ? Boolean(settings.allow_links_customisation) : true,
-    allow_privacy_customisation: settings.allow_privacy_customisation !== undefined ? Boolean(settings.allow_privacy_customisation) : true
+    allow_privacy_customisation: settings.allow_privacy_customisation !== undefined ? Boolean(settings.allow_privacy_customisation) : true,
+    allow_send_details_customisation: settings.allow_send_details_customisation !== undefined ? Boolean(settings.allow_send_details_customisation) : true
   });
   const [editingColorIndex, setEditingColorIndex] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -4725,7 +4872,8 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
       allow_theme_customisation: settings.allow_theme_customisation !== undefined ? Boolean(settings.allow_theme_customisation) : true,
       allow_image_customisation: settings.allow_image_customisation !== undefined ? Boolean(settings.allow_image_customisation) : true,
       allow_links_customisation: settings.allow_links_customisation !== undefined ? Boolean(settings.allow_links_customisation) : true,
-      allow_privacy_customisation: settings.allow_privacy_customisation !== undefined ? Boolean(settings.allow_privacy_customisation) : true
+      allow_privacy_customisation: settings.allow_privacy_customisation !== undefined ? Boolean(settings.allow_privacy_customisation) : true,
+      allow_send_details_customisation: settings.allow_send_details_customisation !== undefined ? Boolean(settings.allow_send_details_customisation) : true
     });
   }, [settings]);
 
@@ -4765,7 +4913,8 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
           allow_theme_customisation: Boolean(localSettings.allow_theme_customisation),
           allow_image_customisation: Boolean(localSettings.allow_image_customisation),
           allow_links_customisation: Boolean(localSettings.allow_links_customisation),
-          allow_privacy_customisation: Boolean(localSettings.allow_privacy_customisation)
+          allow_privacy_customisation: Boolean(localSettings.allow_privacy_customisation),
+          allow_send_details_customisation: Boolean(localSettings.allow_send_details_customisation)
         })
       });
 
@@ -5085,6 +5234,20 @@ function SettingsView({ settings, setSettings, onBack, onSave, apiCall, showAler
                   description="When enabled, users can modify privacy options (require interaction, obfuscation, block robots). When disabled, privacy settings will be locked to organisation defaults."
                   checked={localSettings.allow_privacy_customisation === true}
                   onChange={(checked) => setLocalSettings(prev => ({ ...prev, allow_privacy_customisation: checked }))}
+                />
+              </div>
+
+              {/* Send Your Details Group */}
+              <div className="bg-surface dark:bg-card-dark/50 rounded-input p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-text-primary dark:text-text-primary-dark mb-2">Send Your Details</h3>
+                  <p className="text-xs text-text-secondary dark:text-text-muted-dark mb-4">Control whether users can change the send-your-details options on their cards (the WhatsApp/email/call CTA shown to visitors).</p>
+                </div>
+                <Toggle
+                  label="Allow users to change send-your-details options"
+                  description="When enabled, users can enable/disable the send-your-details CTA and its individual channels. When disabled, these options are locked to their current values."
+                  checked={localSettings.allow_send_details_customisation === true}
+                  onChange={(checked) => setLocalSettings(prev => ({ ...prev, allow_send_details_customisation: checked }))}
                 />
               </div>
                 </div>

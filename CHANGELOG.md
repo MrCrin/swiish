@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-11
+
+### Added
+- **Social Media Previews**: Server-generated preview images for shared cards (`/{slug}/preview.png`) with theme-aware rendering, embedded fonts in the Docker image, Open Graph / Twitter Card meta tag injection (including `og:url`), timestamp cache-busting, and a caching layer with atomic writes, size-limit enforcement and invalidation. Respects `blockRobots` and interaction privacy settings.
+- **Custom Link Icons**: Upload a custom image icon for each custom link in the card editor, in addition to the built-in icon set
+- **Send Your Details Controls**: Per-card toggles to enable/disable the "Send your details" CTA and each of its channels (WhatsApp, email, drop call), with a new organisation-level `allow_send_details_customisation` lock (mirrors the existing privacy customisation lock). Resolves #30.
+
+### Fixed
+- **Admin Card Access Hardened**: Validate user IDs as UUIDs, enforce organisation match via subqueries on admin card fetch/delete, and apply the rate limiter before authentication on admin card routes
+- **Meta Tag Escaping**: Escape `og:url`, `og:image` and `twitter:image` values to prevent XSS; fixed duplicate `<title>` tag injection
+- **Preview Routing & Cache**: Fixed route ordering for `preview.png`, preserved short-code case in lookups, improved cache invalidation to prevent stale content, and clean up only old cache files at startup instead of deleting all
+- **Link Icon Resilience**: Fall back to the built-in icon when a custom link icon fails to load; strip custom link icons when the organisation blocks image uploads
+
+### Changed
+- **Link Icon Uploads**: Oversized link icons are downscaled to 256px (animated GIFs flattened) to keep public pages fast; icon URLs are sanitised server-side
+- **Docker**: Fonts embedded in the image and fontconfig configured for preview text rendering; `/app/uploads` now also stores link icons
+
+### Technical
+- **Dependency Updates**: Bumped `nodemailer` to ^10.0.3 and `sharp` to ^0.35.4; minimum Node.js is now 20.9.0 (added `engines` to package.json, updated README)
+
 ## [0.6.0] - 2026-01-26
 
 ### Added
