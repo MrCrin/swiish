@@ -877,7 +877,11 @@ const [settings, setSettings] = useState({
             // in progress (e.g. triggered by the admin clicking the Edit button, which
             // navigates here and would otherwise cause a second fetch without userId)
             if (!editInProgressRef.current) {
-              handleEdit(slug);
+              // Resolve the card's owner from the freshly loaded card list so direct
+              // loads / refreshes of /people/edit/:slug keep editing the right user's
+              // card (owners can have multiple users sharing the same slug).
+              const matchingCard = (authResult.cardList || []).find(c => c.slug === slug);
+              handleEdit(slug, matchingCard?.userId || null);
             }
           } else {
             // If auth fails, redirect to login (explicit redirect for unauthorized access)
@@ -1757,8 +1761,9 @@ const [settings, setSettings] = useState({
         }
 
         if (res.ok) {
-          // Clear targetUserIdForNewCard after successful save
-          setTargetUserIdForNewCard(null);
+          // Keep targetUserIdForNewCard set for the rest of this editor session so a
+          // second save (e.g. after uploading an image) still targets the same user.
+          // The value is reset on the next editor entry (handleEdit / handleCreateCardConfirm).
           setIsSuccess(true);
           fetchCardList();
           setTimeout(() => setIsSuccess(false), 2000);

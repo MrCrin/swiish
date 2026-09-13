@@ -2214,6 +2214,24 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
       // Valid target user, proceed with card creation
       proceedWithCardSave(req.body.userId);
     });
+  } else if (req.user.role === 'owner') {
+    // Owner saving without an explicit userId. Preserve the existing card's owner so
+    // a re-save (e.g. after uploading an image) doesn't silently reassign the card to
+    // the owner's own account. Fall back to the current user only when no card with
+    // this slug exists yet in the organisation.
+    db.get(
+      `SELECT c.user_id
+       FROM cards c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.slug = ? AND u.organisation_id = ?
+       ORDER BY (c.user_id = ?) DESC, c.updated_at DESC
+       LIMIT 1`,
+      [slug, req.user.organisationId, req.user.id],
+      (err, existing) => {
+        if (err) return next(err);
+        proceedWithCardSave(existing ? existing.user_id : req.user.id);
+      }
+    );
   } else {
     // Member provided userId - ignore it, they can only create for themselves
     // Or no userId provided - use current user
