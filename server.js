@@ -759,11 +759,11 @@ const handleValidationErrors = (req, res, next) => {
     let errorMessage = firstError.msg;
     
     // Make error messages more specific
-    if (firstError.param === 'password' && firstError.msg.includes('length')) {
+    if (firstError.path === 'password' && firstError.msg.includes('length')) {
       errorMessage = 'Password must be at least 8 characters long';
-    } else if (firstError.param === 'email') {
+    } else if (firstError.path === 'email') {
       errorMessage = 'Please enter a valid email address';
-    } else if (firstError.param === 'role') {
+    } else if (firstError.path === 'role') {
       errorMessage = 'Role must be either "owner" or "member"';
     }
     

@@ -907,11 +907,14 @@ const [settings, setSettings] = useState({
       });
       return;
     } else if (path === '/login') {
-      // Login page - check if already authenticated
+      // Login page - check for an active session on mount and immediately
+      // redirect logged-in users to the main panel. The session check relies
+      // on /auth/me alone so a transient card-list failure can't leave an
+      // authenticated user stuck on the login form.
       setView('loading');
       fetchCsrfToken();
-      checkAuth().then((authResult) => {
-        if (authResult.isAuthenticated) {
+      checkSession().then((session) => {
+        if (session.isAuthenticated) {
           // If authenticated, redirect to dashboard (explicit redirect)
           navigate('/people', { replace: true });
         } else {
@@ -1026,50 +1029,63 @@ const [settings, setSettings] = useState({
   }, [location.pathname, navigate]);
 
 
-  // checkAuth: Only updates state, never navigates
-  // Returns { isAuthenticated: boolean, userData: object | null, cardList: array }
-  const checkAuth = async () => {
+  // checkSession: Only checks whether the current session is valid (no navigation)
+  // Returns { isAuthenticated: boolean, userData: object | null }
+  const checkSession = async () => {
     try {
       // Fetch CSRF token first if not already fetched
       if (!csrfToken) {
         await fetchCsrfToken();
       }
-      // Fetch user info to get role
+      // Fetch user info to confirm the session is still active
       const userRes = await apiCall(`${API_ENDPOINT}/auth/me`);
       if (userRes.ok) {
         const userData = await userRes.json();
         setUserRole(userData.role);
         setCurrentUserId(userData.id);
         setCurrentUserEmail(userData.email);
-        
-        // Fetch cards
-        const res = await apiCall(`${API_ENDPOINT}/admin/cards`);
-        if (res.ok) {
-          const list = await res.json();
-          setCardList(list);
-          setIsAuthenticated(true);
-          if (userData.role === 'member') {
-            fetchPublicSettings(userData.orgSlug || 'default');
-          } else {
-            fetchSettings();
-          }
-          
-          return { isAuthenticated: true, userData, cardList: list };
-        } else {
-          setIsAuthenticated(false);
-          setUserRole(null);
-          return { isAuthenticated: false, userData: null, cardList: [] };
-        }
-      } else {
-        setIsAuthenticated(false);
-        setUserRole(null);
-        return { isAuthenticated: false, userData: null, cardList: [] };
+        setIsAuthenticated(true);
+        return { isAuthenticated: true, userData };
       }
     } catch (e) {
-      setIsAuthenticated(false);
-      setUserRole(null);
+      console.error('Session check failed:', e);
+    }
+    setIsAuthenticated(false);
+    setUserRole(null);
+    return { isAuthenticated: false, userData: null };
+  };
+
+  // checkAuth: Only updates state, never navigates
+  // Returns { isAuthenticated: boolean, userData: object | null, cardList: array }
+  // Authentication is based on the active session only; a failure to load the
+  // card list must not invalidate a valid session (it is fetched best-effort).
+  const checkAuth = async () => {
+    const session = await checkSession();
+    if (!session.isAuthenticated) {
       return { isAuthenticated: false, userData: null, cardList: [] };
     }
+
+    const { userData } = session;
+
+    // Fetch cards (best-effort - failure here shouldn't log the user out)
+    let list = [];
+    try {
+      const res = await apiCall(`${API_ENDPOINT}/admin/cards`);
+      if (res.ok) {
+        list = await res.json();
+        setCardList(list);
+      }
+    } catch (e) {
+      console.error('Failed to fetch card list:', e);
+    }
+
+    if (userData.role === 'member') {
+      fetchPublicSettings(userData.orgSlug || 'default');
+    } else {
+      fetchSettings();
+    }
+
+    return { isAuthenticated: true, userData, cardList: list };
   };
 
   const fetchPublicCard = async (slug) => {
