@@ -4,15 +4,16 @@ import DOMPurify from 'dompurify';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import flags from 'country-flag-icons/react/3x2';
-import { 
-  Camera, Upload, Save, Share2, Phone, Mail, Globe, 
-  Linkedin, Twitter, Instagram, Github, Edit3, Eye, 
-  X, Check, User, MapPin, Briefcase, Lock, LogIn, AlertCircle, 
+import {
+  Camera, Upload, Save, Share2, Phone, Mail, Globe,
+  Edit3, Eye,
+  X, Check, User, MapPin, Briefcase, Lock, LogIn, AlertCircle,
   Plus, Trash2, ArrowLeft, Users, ExternalLink, RefreshCw,
-  Download, FileText, Calendar, Video, Music, ShoppingCart, 
+  Download, FileText, Calendar, Video, Music, ShoppingCart,
   Link as LinkIcon, Youtube, Facebook, MessageCircle, Sun, Moon,
   ChevronUp, ChevronDown, GripVertical, Settings
 } from 'lucide-react';
+import { siX, siInstagram, siGithub, siMatrix } from 'simple-icons';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -35,7 +36,9 @@ const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
 
-function MatrixIcon({ className, ...props }) {
+const LINKEDIN_ICON_PATH = 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z';
+
+function BrandIcon({ path, className, ...props }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -45,12 +48,16 @@ function MatrixIcon({ className, ...props }) {
       className={className}
       {...props}
     >
-      <g transform="scale(0.046875)">
-        <path d="M465.3 499.7V11.8h-35V.1h48.6V512h-48.6v-11.7zM163.4 167v24.6h.7c6.2-9 14.3-16.5 23.8-21.9 9.3-5.2 20-7.8 31.8-7.8 11.5 0 22.1 2.2 31.5 6.7 9.5 4.5 16.8 12.3 21.8 23.7 5.4-8 12.7-15.1 22.1-21.1 9.3-6.1 20.3-9.2 33-9.2 9.6 0 18.6 1.2 26.7 3.5 8.2 2.4 15.3 6.1 21.1 11.3 5.9 5.2 10.4 11.9 13.7 20.3s4.9 18.4 4.9 30.2v122.1h-50.1V246.1c0-6.1-.2-11.9-.7-17.3-.3-4.9-1.6-9.7-3.9-14.1-2.1-4-5.4-7.3-9.3-9.5-4.1-2.3-9.7-3.5-16.8-3.5-7 0-12.7 1.4-17.1 4-4.4 2.7-7.8 6.2-10.2 10.6-2.5 4.6-4.2 9.6-4.9 14.8q-1.2 8.4-1.2 16.8v101.6h-50.1V247.1c0-5.4-.1-10.8-.3-16-.2-5-1.2-10-3-14.7-1.7-4.4-4.8-8.2-8.8-10.8-4.1-2.7-10.2-4-18.2-4-3.2.1-6.3.7-9.3 1.6-4.1 1.2-8 3.2-11.3 6-3.6 2.9-6.8 7.2-9.3 12.7-2.6 5.5-3.9 12.8-3.9 21.8v105.9h-50.2V167.2zM46.7 12.3v487.9h35v11.7H33.1V0h48.5v11.7z" />
-      </g>
+      <path d={path} />
     </svg>
   );
 }
+
+const LinkedinIcon = (props) => <BrandIcon path={LINKEDIN_ICON_PATH} {...props} />;
+const TwitterIcon = (props) => <BrandIcon path={siX.path} {...props} />;
+const InstagramIcon = (props) => <BrandIcon path={siInstagram.path} {...props} />;
+const GithubIcon = (props) => <BrandIcon path={siGithub.path} {...props} />;
+const MatrixIcon = (props) => <BrandIcon path={siMatrix.path} {...props} />;
 
 const THEME_PRESETS = {
   swiish: [
@@ -3274,10 +3281,10 @@ END:VCARD`;
 
         <div className="grid grid-cols-4 gap-3 mb-8">
            <SocialIcon url={contact.website} icon={Globe} label="Web" themeColor={themeColor} />
-           <SocialIcon url={social.linkedin} icon={Linkedin} label="LinkedIn" themeColor={themeColor} />
-           <SocialIcon url={social.twitter} icon={Twitter} label="X" themeColor={themeColor} />
-           <SocialIcon url={social.instagram} icon={Instagram} label="Insta" themeColor={themeColor} />
-           <SocialIcon url={social.github} icon={Github} label="Git" themeColor={themeColor} />
+           <SocialIcon url={social.linkedin} icon={LinkedinIcon} label="LinkedIn" themeColor={themeColor} />
+           <SocialIcon url={social.twitter} icon={TwitterIcon} label="X" themeColor={themeColor} />
+           <SocialIcon url={social.instagram} icon={InstagramIcon} label="Insta" themeColor={themeColor} />
+           <SocialIcon url={social.github} icon={GithubIcon} label="Git" themeColor={themeColor} />
            <SocialIcon url={social.matrix} icon={MatrixIcon} label="Matrix" themeColor={themeColor} />
         </div>
 
@@ -3482,10 +3489,10 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                     />
                   </div>
                   <Input icon={Globe} placeholder="Website" value={data.contact.website} onChange={v => handleInputChange('contact', 'website', v)} type="url" />
-                  <Input icon={Linkedin} placeholder="LinkedIn" value={data.social.linkedin} onChange={v => handleInputChange('social', 'linkedin', v)} type="url" />
-                  <Input icon={Twitter} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
-                  <Input icon={Instagram} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
-                  <Input icon={Github} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
+                  <Input icon={LinkedinIcon} placeholder="LinkedIn" value={data.social.linkedin} onChange={v => handleInputChange('social', 'linkedin', v)} type="url" />
+                  <Input icon={TwitterIcon} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
+                  <Input icon={InstagramIcon} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
+                  <Input icon={GithubIcon} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
                   <Input icon={MatrixIcon} placeholder="Matrix share URL" value={data.social.matrix || ''} onChange={v => handleInputChange('social', 'matrix', v)} type="url" />
                 </div>
              </div>
@@ -3915,7 +3922,7 @@ function SocialIcon({ url, icon: Icon, label, themeColor }) {
   const hoverColor = themeColor?.buttonStyle || themeColor?.textStyle || '#4f46e5';
   return (
     <a href={url} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-2 group">
-      <div className="w-full aspect-square rounded-card bg-surface dark:bg-surface-dark border border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary dark:text-text-secondary-dark group-hover:scale-105 transition-transform group-hover:shadow-md group-hover:text-white" style={{ '--hover-bg': hoverColor }}>
+      <div className="w-full aspect-square rounded-input bg-surface dark:bg-surface-dark border border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary dark:text-text-secondary-dark group-hover:scale-105 transition-transform group-hover:shadow-md group-hover:text-white" style={{ '--hover-bg': hoverColor }}>
         <style>{`.group:hover div { background-color: ${hoverColor}; border-color: ${hoverColor}; }`}</style>
         <Icon className="w-6 h-6" />
       </div>
