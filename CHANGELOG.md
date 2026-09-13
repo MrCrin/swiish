@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Licensing**: Ship the complete, verbatim AGPL-3.0 text in `LICENSE.md` with a trade name exception notice linking to `TRADEMARKS.md`, replacing the abbreviated license file
 
+### Fixed
+- **Login Page Session Awareness**: Redirect already-authenticated users from the login page to the dashboard by checking for an active session on mount, decoupling the session check from the card-list fetch so a transient `/api/admin/cards` failure no longer lands a logged-in user on the login form. Also fixed the friendly "Please enter a valid email address" validation message (express-validator v7 renamed `param` to `path`). Resolves #37.
+
 ## [0.7.0] - 2026-09-11
 
 ### Added
