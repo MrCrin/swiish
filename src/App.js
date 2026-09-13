@@ -35,6 +35,23 @@ const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
 
+function MatrixIcon({ className, ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <g transform="scale(0.046875)">
+        <path d="M465.3 499.7V11.8h-35V.1h48.6V512h-48.6v-11.7zM163.4 167v24.6h.7c6.2-9 14.3-16.5 23.8-21.9 9.3-5.2 20-7.8 31.8-7.8 11.5 0 22.1 2.2 31.5 6.7 9.5 4.5 16.8 12.3 21.8 23.7 5.4-8 12.7-15.1 22.1-21.1 9.3-6.1 20.3-9.2 33-9.2 9.6 0 18.6 1.2 26.7 3.5 8.2 2.4 15.3 6.1 21.1 11.3 5.9 5.2 10.4 11.9 13.7 20.3s4.9 18.4 4.9 30.2v122.1h-50.1V246.1c0-6.1-.2-11.9-.7-17.3-.3-4.9-1.6-9.7-3.9-14.1-2.1-4-5.4-7.3-9.3-9.5-4.1-2.3-9.7-3.5-16.8-3.5-7 0-12.7 1.4-17.1 4-4.4 2.7-7.8 6.2-10.2 10.6-2.5 4.6-4.2 9.6-4.9 14.8q-1.2 8.4-1.2 16.8v101.6h-50.1V247.1c0-5.4-.1-10.8-.3-16-.2-5-1.2-10-3-14.7-1.7-4.4-4.8-8.2-8.8-10.8-4.1-2.7-10.2-4-18.2-4-3.2.1-6.3.7-9.3 1.6-4.1 1.2-8 3.2-11.3 6-3.6 2.9-6.8 7.2-9.3 12.7-2.6 5.5-3.9 12.8-3.9 21.8v105.9h-50.2V167.2zM46.7 12.3v487.9h35v11.7H33.1V0h48.5v11.7z" />
+      </g>
+    </svg>
+  );
+}
+
 const THEME_PRESETS = {
   swiish: [
     { name: "indigo", gradient: "from-indigo-600 to-purple-600", button: "bg-indigo-600 hover:bg-indigo-700", link: "text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100", text: "text-indigo-600" },
@@ -220,7 +237,7 @@ const getDefaultTemplate = (settings) => ({
     phone: "",
     website: "",
   },
-  social: { linkedin: "", twitter: "", instagram: "", github: "" },
+  social: { linkedin: "", twitter: "", instagram: "", github: "", matrix: "" },
   theme: { color: "indigo", style: "modern" },
   images: { avatar: null, banner: null },
   links: [],
@@ -3261,6 +3278,7 @@ END:VCARD`;
            <SocialIcon url={social.twitter} icon={Twitter} label="X" themeColor={themeColor} />
            <SocialIcon url={social.instagram} icon={Instagram} label="Insta" themeColor={themeColor} />
            <SocialIcon url={social.github} icon={Github} label="Git" themeColor={themeColor} />
+           <SocialIcon url={social.matrix} icon={MatrixIcon} label="Matrix" themeColor={themeColor} />
         </div>
 
         {/* Swiish logo */}
@@ -3468,6 +3486,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   <Input icon={Twitter} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
                   <Input icon={Instagram} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
                   <Input icon={Github} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
+                  <Input icon={MatrixIcon} placeholder="Matrix share URL" value={data.social.matrix || ''} onChange={v => handleInputChange('social', 'matrix', v)} type="url" />
                 </div>
              </div>
            )}
