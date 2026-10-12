@@ -42,6 +42,7 @@ COPY package*.json ./
 RUN npm install --production
 COPY server.js .
 COPY matrix-url.js .
+COPY short-code.js .
 COPY database.json .
 COPY migrations/ ./migrations/
 

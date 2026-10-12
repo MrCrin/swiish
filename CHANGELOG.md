@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Licensing**: Ship the complete, verbatim AGPL-3.0 text in `LICENSE.md` with a trade name exception notice linking to `TRADEMARKS.md`, replacing the abbreviated license file
 
 ### Fixed
+- **Short Codes Without Look-Alike Characters**: New short codes are generated without `0 O o 1 l I`, which can't be told apart in most fonts, so a code read off a printed card or QR caption can be typed back. Existing codes keep working; lookups still accept any 7-character alphanumeric code. Resolves #76.
 - **Login Page Session Awareness**: Redirect already-authenticated users from the login page to the dashboard by checking for an active session on mount, decoupling the session check from the card-list fetch so a transient `/api/admin/cards` failure no longer lands a logged-in user on the login form. Also fixed the friendly "Please enter a valid email address" validation message (express-validator v7 renamed `param` to `path`). Resolves #37.
 
 ## [0.7.0] - 2026-09-11

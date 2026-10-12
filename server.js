@@ -20,13 +20,10 @@ const util = require('util');
 const { execSync } = require('child_process');
 const sharp = require('sharp');
 const { normalizeMatrixUrl } = require('./matrix-url');
+const { SHORT_CODE_LENGTH, generateShortCode } = require('./short-code');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Short code configuration
-const SHORT_CODE_LENGTH = 7;
-const SHORT_CODE_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 // Logging configuration
 const MAX_LOG_LINES = 1000;
@@ -1340,25 +1337,7 @@ const identifierValidation = param('slug')
   .isLength({ min: 1, max: 50 })
   .withMessage('Identifier must be between 1 and 50 characters');
 
-// Short code generation functions
-const crypto = require('crypto');
-
-function generateShortCode() {
-  let code = '';
-  const charsLength = SHORT_CODE_CHARS.length;
-  const maxValid = Math.floor(256 / charsLength) * charsLength; // 248 for 62 chars
-  
-  for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
-    let randomByte;
-    do {
-      randomByte = crypto.randomBytes(1)[0];
-    } while (randomByte >= maxValid);
-    
-    code += SHORT_CODE_CHARS[randomByte % charsLength];
-  }
-  return code;
-}
-
+// Short code generation (generateShortCode lives in short-code.js)
 function ensureUniqueShortCode(db, callback) {
   let attempts = 0;
   const tryGenerate = () => {
