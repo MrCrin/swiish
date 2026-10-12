@@ -110,17 +110,36 @@ const QR_STORAGE_KEY = 'swiish:lastQrPayload';
 
 // Build a vCard string for QR code encoding (simplified for reliable scanning)
 // When scanned, this will add the contact directly to the phone
+// decodeURIComponent throws URIError on malformed percent-encoding (e.g. mailto:100%off@x)
+const safeDecode = (v) => {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+};
+
 const buildQrPayload = (shortCode, data) => {
-  const { personal = {}, contact = {} } = data || {};
+  const { personal = {}, contact = {}, links = [] } = data || {};
 
   const safe = (v, maxLen = 120) => sanitizeText(v || '').substring(0, maxLen);
-  
+
   const firstName = safe(personal.firstName || '', 40);
   const lastName = safe(personal.lastName || '', 40);
   const fullName = `${firstName} ${lastName}`.trim();
   const company = safe(personal.company || '', 80);
   const email = safe(contact.email || '', 120);
   const phone = safe(contact.phone || '', 50);
+
+  // Extra emails/phones can live in links as mailto:/tel: entries
+  const linkEmails = (Array.isArray(links) ? links : [])
+    .filter(l => /^mailto:/i.test(l.url || '') && l.title)
+    .map(l => ({ email: safe(safeDecode((l.url || '').slice(7).split('?')[0]).replace(/[\r\n%]/g, ''), 120), label: safe(l.title, 60) }))
+    .filter(e => e.email);
+  const linkPhones = (Array.isArray(links) ? links : [])
+    .filter(l => /^(tel|sms):/i.test(l.url || '') && l.title)
+    .map(l => ({ phone: safe((l.url || '').replace(/^(tel|sms):/i, '').replace(/[^\d+]/g, ''), 50), label: safe(l.title, 60) }))
+    .filter(p => p.phone);
 
   // Use short code for QR URL (always use short code for simpler QR)
   const cardUrl = typeof window !== 'undefined' && shortCode
@@ -142,10 +161,18 @@ const buildQrPayload = (shortCode, data) => {
   if (email) {
     vcard += `EMAIL;TYPE=WORK:${email}\n`;
   }
-  
+
+  linkEmails.forEach(e => {
+    vcard += `EMAIL;TYPE=INTERNET:${e.email}\n`;
+  });
+
   if (phone) {
     vcard += `TEL;TYPE=CELL:${phone}\n`;
   }
+
+  linkPhones.forEach(p => {
+    vcard += `TEL;TYPE=VOICE:${p.phone}\n`;
+  });
   
   if (cardUrl) {
     vcard += `URL:${cardUrl}\n`;
@@ -208,7 +235,9 @@ const ICON_MAP = {
   youtube: Youtube,
   facebook: Facebook,
   whatsapp: MessageCircle,
-  globe: Globe
+  globe: Globe,
+  mail: Mail,
+  phone: Phone
 };
 
 function LinkGlyph({ link, className = "w-5 h-5" }) {
@@ -235,9 +264,11 @@ const getDefaultTemplate = (settings) => ({
     firstName: "New",
     lastName: "User",
     title: "Role Title",
+    subtitle: "",
     company: settings?.default_organisation || "My Organisation",
     bio: "Welcome to the team.",
-    location: "London, UK"
+    location: "London, UK",
+    mapLink: ""
   },
   contact: {
     email: "",
@@ -2725,7 +2756,7 @@ function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
     // For QR generation, always use short code if available, otherwise fallback to slug
     const qrIdentifier = shortCode || (pathParts.length > 0 ? pathParts[pathParts.length - 1] : '');
     
-    const payload = buildQrPayload(shortCode, { personal, contact, social, images, theme });
+    const payload = buildQrPayload(shortCode, { personal, contact, social, images, theme, links });
     // Always cache latest rich payload for offline use
     saveQrPayloadToStorage(payload);
 
@@ -2804,7 +2835,20 @@ function CardDisplay({ data, settings, darkMode, toggleDarkMode, showAlert }) {
     const email = sanitizeText(contact.email || '');
     const website = sanitizeText(contact.website || '');
     const bio = sanitizeText(personal.bio || '');
-    
+
+    // Extra emails/phones from links (mailto:/tel: entries)
+    const linkEmails = (links || [])
+      .filter(l => /^mailto:/i.test(l.url || '') && l.title)
+      .map(l => sanitizeText(safeDecode((l.url || '').slice(7).split('?')[0]).replace(/[\r\n%]/g, '')).substring(0, 120))
+      .filter(Boolean);
+    const linkPhones = (links || [])
+      .filter(l => /^(tel|sms):/i.test(l.url || '') && l.title)
+      .map(l => sanitizeText((l.url || '').slice(4).replace(/[^\d+]/g, '')).substring(0, 50))
+      .filter(Boolean);
+
+    const extraEmailLines = linkEmails.map(e => `EMAIL;TYPE=INTERNET:${e}`).join('\n');
+    const extraPhoneLines = linkPhones.map(p => `TEL;TYPE=VOICE:${p}`).join('\n');
+
     const vcard = `BEGIN:VCARD
 VERSION:3.0
 FN:${firstName} ${lastName}
@@ -2813,6 +2857,8 @@ ORG:${company}
 TITLE:${title}
 TEL;TYPE=CELL:${phone}
 EMAIL;TYPE=WORK:${email}
+${extraPhoneLines}
+${extraEmailLines}
 URL:${website}
 NOTE:${bio}
 END:VCARD`;
@@ -3044,13 +3090,28 @@ END:VCARD`;
           {(() => {
             const color = settings?.theme_colors?.find(c => c.name === theme.color);
             const title = sanitizeText(personal.title || '');
-            if (color?.textStyle) {
-              return <div className="text-lg font-medium" style={{ color: color.textStyle }}>{title}</div>;
-            }
-            return <div className="text-lg font-medium" style={{ color: getTextColor(theme.color, settings) }}>{title}</div>;
+            const subtitle = sanitizeText(personal.subtitle || '');
+            const titleStyle = { color: (color?.textStyle || getTextColor(theme.color, settings)) };
+            return (
+              <>
+                {title && <div className="text-lg font-medium" style={titleStyle}>{title}</div>}
+                {subtitle && <div className="text-sm font-normal -mt-0.5" style={titleStyle}>{subtitle}</div>}
+              </>
+            );
           })()}
           <div className="flex items-center text-text-muted dark:text-text-muted-dark text-sm gap-2"><Briefcase className="w-4 h-4" /><span>{sanitizeText(personal.company || '')}</span></div>
-          {personal.location && <div className="flex items-center text-text-muted-subtle dark:text-text-muted-dark text-sm gap-2 mt-1"><MapPin className="w-4 h-4" /><span>{sanitizeText(personal.location)}</span></div>}
+          {personal.location && (
+            personal.mapLink ? (
+              <a
+                href={personal.mapLink}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center text-text-muted-subtle dark:text-text-muted-dark text-sm gap-2 mt-1 hover:underline"
+              ><MapPin className="w-4 h-4" /><span>{sanitizeText(personal.location)}</span></a>
+            ) : (
+              <div className="flex items-center text-text-muted-subtle dark:text-text-muted-dark text-sm gap-2 mt-1"><MapPin className="w-4 h-4" /><span>{sanitizeText(personal.location)}</span></div>
+            )
+          )}
         </div>
 
         {personal.bio && <div className="mb-8"><p className="text-text-secondary dark:text-text-secondary-dark leading-relaxed text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHTML(personal.bio) }}></p></div>}
@@ -3218,11 +3279,10 @@ END:VCARD`;
               const color = settings?.theme_colors?.find(c => c.name === theme.color);
               if (color?.linkStyle) {
                 return (
-                  <a 
+                  <a
                     key={link.id}
-                    href={link.url} 
-                    target="_blank" 
-                    rel="noreferrer"
+                    href={link.url}
+                    {...(/^https?:/i.test(link.url || '') ? { target: '_blank', rel: 'noreferrer' } : {})}
                     className="flex items-center p-4 rounded-input border transition-all active:scale-[0.99]"
                     style={{ 
                       color: color.linkStyle, 
@@ -3253,11 +3313,10 @@ END:VCARD`;
                 );
               }
               return (
-                <a 
-                  key={link.id} 
-                  href={link.url} 
-                  target="_blank" 
-                  rel="noreferrer"
+                <a
+                  key={link.id}
+                  href={link.url}
+                  {...(/^https?:/i.test(link.url || '') ? { target: '_blank', rel: 'noreferrer' } : {})}
                   className="flex items-center p-4 rounded-input border transition-all active:scale-[0.99] dark:border-border-dark"
                   style={{ color: getLinkColor(theme.color, settings) }}
                   onMouseEnter={(e) => {
@@ -3461,6 +3520,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   <Input label="First Name" value={data.personal.firstName} onChange={v => handleInputChange('personal', 'firstName', v)} />
                   <Input label="Last Name" value={data.personal.lastName} onChange={v => handleInputChange('personal', 'lastName', v)} />
                   <Input label="Job Title" value={data.personal.title} onChange={v => handleInputChange('personal', 'title', v)} />
+                  <Input label="Job Subtitle / Credentials" value={data.personal.subtitle || ''} onChange={v => handleInputChange('personal', 'subtitle', v)} />
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark">Organisation</label>
                     <div className="relative">
@@ -3479,6 +3539,7 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                   </div>
                 </div>
                 <Input label="Location" value={data.personal.location} onChange={v => handleInputChange('personal', 'location', v)} />
+                <Input label="Map Link (opens when location is clicked)" value={data.personal.mapLink || ''} onChange={v => handleInputChange('personal', 'mapLink', v)} />
                 <TextArea label="Bio" value={data.personal.bio} onChange={v => handleInputChange('personal', 'bio', v)} />
                 <div className="h-px bg-surface dark:bg-surface-dark" />
                 <div className="space-y-4">
