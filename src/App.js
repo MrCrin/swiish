@@ -13,7 +13,7 @@ import {
   Link as LinkIcon, Youtube, Facebook, MessageCircle, Sun, Moon,
   ChevronUp, ChevronDown, GripVertical, Settings
 } from 'lucide-react';
-import { siX, siInstagram, siGithub, siMatrix } from 'simple-icons';
+import { siX, siInstagram, siGithub, siMatrix, siTiktok, siTelegram, siWhatsapp } from 'simple-icons';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -58,6 +58,9 @@ const TwitterIcon = (props) => <BrandIcon path={siX.path} {...props} />;
 const InstagramIcon = (props) => <BrandIcon path={siInstagram.path} {...props} />;
 const GithubIcon = (props) => <BrandIcon path={siGithub.path} {...props} />;
 const MatrixIcon = (props) => <BrandIcon path={siMatrix.path} {...props} />;
+const TiktokIcon = (props) => <BrandIcon path={siTiktok.path} {...props} />;
+const TelegramIcon = (props) => <BrandIcon path={siTelegram.path} {...props} />;
+const WhatsappIcon = (props) => <BrandIcon path={siWhatsapp.path} {...props} />;
 
 const THEME_PRESETS = {
   swiish: [
@@ -207,8 +210,14 @@ const ICON_MAP = {
   shop: ShoppingCart,
   youtube: Youtube,
   facebook: Facebook,
-  whatsapp: MessageCircle,
-  globe: Globe
+  whatsapp: WhatsappIcon,
+  globe: Globe,
+  linkedin: LinkedinIcon,
+  twitter: TwitterIcon,
+  instagram: InstagramIcon,
+  github: GithubIcon,
+  tiktok: TiktokIcon,
+  telegram: TelegramIcon
 };
 
 function LinkGlyph({ link, className = "w-5 h-5" }) {
