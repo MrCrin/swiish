@@ -1,7 +1,11 @@
 /* global self, caches, fetch */
 
-const CACHE_NAME = 'swiish-app-shell-v3';
-const APP_SHELL = ['/', '/index.html'];
+// Bump when the cached shell format changes so installed workers pick up the new version.
+const CACHE_NAME = 'swiish-app-shell-v4';
+// Cache the server-rendered '/' response rather than the raw /index.html build file: the server
+// adds a per-request CSP nonce header and matching nonces to the inline scripts, so the cached
+// body and CSP header must come from the same response.
+const APP_SHELL = ['/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -48,24 +52,20 @@ self.addEventListener('fetch', (event) => {
     request.mode === 'navigate' ||
     (request.headers.get('accept') || '').includes('text/html');
 
-  // Serve index.html for navigations - NETWORK FIRST to avoid stale HTML
+  // Navigations - NETWORK FIRST to avoid stale HTML
   if (isNavigation) {
     event.respondWith(
-      // Always try network first - fetch index.html (server serves it for all routes)
-      fetch('/index.html', { 
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      })
+      // Fetch the page that was actually requested. The server renders every route with a
+      // matching CSP nonce and meta tags, so the response must not be swapped for /index.html.
+      fetch(request, { cache: 'no-store' })
         .then((resp) => {
-          // Don't cache index.html - always fetch fresh to avoid stale content
+          // Don't cache navigations - always fetch fresh to avoid stale content
           // Return the network response directly
           return resp;
         })
         .catch(() => {
           // Only fall back to cache if network completely fails (offline)
-          return caches.match('/index.html').then((cached) => {
+          return caches.match('/').then((cached) => {
             if (cached) return cached;
             // Last resort: offline fallback
             return new Response('<!DOCTYPE html><html><body>Offline - Please check your connection</body></html>', {

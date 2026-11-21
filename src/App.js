@@ -4,15 +4,16 @@ import DOMPurify from 'dompurify';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import flags from 'country-flag-icons/react/3x2';
-import { 
-  Camera, Upload, Save, Share2, Phone, Mail, Globe, 
-  Linkedin, Twitter, Instagram, Github, Edit3, Eye, 
-  X, Check, User, MapPin, Briefcase, Lock, LogIn, AlertCircle, 
+import {
+  Camera, Upload, Save, Share2, Phone, Mail, Globe,
+  Edit3, Eye,
+  X, Check, User, MapPin, Briefcase, Lock, LogIn, AlertCircle,
   Plus, Trash2, ArrowLeft, Users, ExternalLink, RefreshCw,
-  Download, FileText, Calendar, Video, Music, ShoppingCart, 
+  Download, FileText, Calendar, Video, Music, ShoppingCart,
   Link as LinkIcon, Youtube, Facebook, MessageCircle, Sun, Moon,
-  ChevronUp, ChevronDown, GripVertical, Settings
+  ChevronUp, ChevronDown, GripVertical, Settings, Copy
 } from 'lucide-react';
+import { siX, siInstagram, siGithub, siMatrix } from 'simple-icons';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -34,6 +35,29 @@ try {
 const swiishTheme = require('./theme/swiish');
 const minimalTheme = require('./theme/minimal');
 const THEME_FILES = { swiish: swiishTheme, minimal: minimalTheme };
+
+const LINKEDIN_ICON_PATH = 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z';
+
+function BrandIcon({ path, className, ...props }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
+const LinkedinIcon = (props) => <BrandIcon path={LINKEDIN_ICON_PATH} {...props} />;
+const TwitterIcon = (props) => <BrandIcon path={siX.path} {...props} />;
+const InstagramIcon = (props) => <BrandIcon path={siInstagram.path} {...props} />;
+const GithubIcon = (props) => <BrandIcon path={siGithub.path} {...props} />;
+const MatrixIcon = (props) => <BrandIcon path={siMatrix.path} {...props} />;
 
 const THEME_PRESETS = {
   swiish: [
@@ -83,6 +107,26 @@ const applyThemeCssVars = (variant) => {
 
 // --- QR PAYLOAD STORAGE KEYS ---
 const QR_STORAGE_KEY = 'swiish:lastQrPayload';
+
+// Copies text to the clipboard, falling back to a hidden textarea where the Clipboard API is unavailable
+const copyTextToClipboard = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
 
 // Build a vCard string for QR code encoding (simplified for reliable scanning)
 // When scanned, this will add the contact directly to the phone
@@ -220,7 +264,7 @@ const getDefaultTemplate = (settings) => ({
     phone: "",
     website: "",
   },
-  social: { linkedin: "", twitter: "", instagram: "", github: "" },
+  social: { linkedin: "", twitter: "", instagram: "", github: "", matrix: "" },
   theme: { color: "indigo", style: "modern" },
   images: { avatar: null, banner: null },
   links: [],
@@ -853,7 +897,11 @@ const [settings, setSettings] = useState({
             // in progress (e.g. triggered by the admin clicking the Edit button, which
             // navigates here and would otherwise cause a second fetch without userId)
             if (!editInProgressRef.current) {
-              handleEdit(slug);
+              // Resolve the card's owner from the freshly loaded card list so direct
+              // loads / refreshes of /people/edit/:slug keep editing the right user's
+              // card (owners can have multiple users sharing the same slug).
+              const matchingCard = (authResult.cardList || []).find(c => c.slug === slug);
+              handleEdit(slug, matchingCard?.userId || null);
             }
           } else {
             // If auth fails, redirect to login (explicit redirect for unauthorized access)
@@ -907,11 +955,14 @@ const [settings, setSettings] = useState({
       });
       return;
     } else if (path === '/login') {
-      // Login page - check if already authenticated
+      // Login page - check for an active session on mount and immediately
+      // redirect logged-in users to the main panel. The session check relies
+      // on /auth/me alone so a transient card-list failure can't leave an
+      // authenticated user stuck on the login form.
       setView('loading');
       fetchCsrfToken();
-      checkAuth().then((authResult) => {
-        if (authResult.isAuthenticated) {
+      checkSession().then((session) => {
+        if (session.isAuthenticated) {
           // If authenticated, redirect to dashboard (explicit redirect)
           navigate('/people', { replace: true });
         } else {
@@ -1026,50 +1077,63 @@ const [settings, setSettings] = useState({
   }, [location.pathname, navigate]);
 
 
-  // checkAuth: Only updates state, never navigates
-  // Returns { isAuthenticated: boolean, userData: object | null, cardList: array }
-  const checkAuth = async () => {
+  // checkSession: Only checks whether the current session is valid (no navigation)
+  // Returns { isAuthenticated: boolean, userData: object | null }
+  const checkSession = async () => {
     try {
       // Fetch CSRF token first if not already fetched
       if (!csrfToken) {
         await fetchCsrfToken();
       }
-      // Fetch user info to get role
+      // Fetch user info to confirm the session is still active
       const userRes = await apiCall(`${API_ENDPOINT}/auth/me`);
       if (userRes.ok) {
         const userData = await userRes.json();
         setUserRole(userData.role);
         setCurrentUserId(userData.id);
         setCurrentUserEmail(userData.email);
-        
-        // Fetch cards
-        const res = await apiCall(`${API_ENDPOINT}/admin/cards`);
-        if (res.ok) {
-          const list = await res.json();
-          setCardList(list);
-          setIsAuthenticated(true);
-          if (userData.role === 'member') {
-            fetchPublicSettings(userData.orgSlug || 'default');
-          } else {
-            fetchSettings();
-          }
-          
-          return { isAuthenticated: true, userData, cardList: list };
-        } else {
-          setIsAuthenticated(false);
-          setUserRole(null);
-          return { isAuthenticated: false, userData: null, cardList: [] };
-        }
-      } else {
-        setIsAuthenticated(false);
-        setUserRole(null);
-        return { isAuthenticated: false, userData: null, cardList: [] };
+        setIsAuthenticated(true);
+        return { isAuthenticated: true, userData };
       }
     } catch (e) {
-      setIsAuthenticated(false);
-      setUserRole(null);
+      console.error('Session check failed:', e);
+    }
+    setIsAuthenticated(false);
+    setUserRole(null);
+    return { isAuthenticated: false, userData: null };
+  };
+
+  // checkAuth: Only updates state, never navigates
+  // Returns { isAuthenticated: boolean, userData: object | null, cardList: array }
+  // Authentication is based on the active session only; a failure to load the
+  // card list must not invalidate a valid session (it is fetched best-effort).
+  const checkAuth = async () => {
+    const session = await checkSession();
+    if (!session.isAuthenticated) {
       return { isAuthenticated: false, userData: null, cardList: [] };
     }
+
+    const { userData } = session;
+
+    // Fetch cards (best-effort - failure here shouldn't log the user out)
+    let list = [];
+    try {
+      const res = await apiCall(`${API_ENDPOINT}/admin/cards`);
+      if (res.ok) {
+        list = await res.json();
+        setCardList(list);
+      }
+    } catch (e) {
+      console.error('Failed to fetch card list:', e);
+    }
+
+    if (userData.role === 'member') {
+      fetchPublicSettings(userData.orgSlug || 'default');
+    } else {
+      fetchSettings();
+    }
+
+    return { isAuthenticated: true, userData, cardList: list };
   };
 
   const fetchPublicCard = async (slug) => {
@@ -1293,7 +1357,13 @@ const [settings, setSettings] = useState({
           theme_variant: mergedVariant,
           theme_colors: (settingsData.theme_colors && Array.isArray(settingsData.theme_colors)) 
             ? initializeColorDataForSettings(settingsData.theme_colors)
-            : THEME_PRESETS.swiish
+            : THEME_PRESETS.swiish,
+          // Customisation locks: members need these so the editor only offers edits the server will keep
+          allow_theme_customisation: settingsData.allow_theme_customisation !== false,
+          allow_image_customisation: settingsData.allow_image_customisation !== false,
+          allow_links_customisation: settingsData.allow_links_customisation !== false,
+          allow_privacy_customisation: settingsData.allow_privacy_customisation !== false,
+          allow_send_details_customisation: settingsData.allow_send_details_customisation !== false
         };
         
         // Set state and apply theme immediately (same pattern as fetchSettings)
@@ -1624,9 +1694,11 @@ const [settings, setSettings] = useState({
       // User IDs are UUID strings (crypto.randomUUID()). Guard against null/undefined/non-string values.
       const validUserId = userId && typeof userId === 'string' && userId.trim() ? userId : null;
       const isOtherUser = validUserId !== null && validUserId !== currentUserId;
+      // Always load through an authenticated, user-scoped route. The public /cards/:slug route
+      // resolves by slug alone, so it can return another user's card when slugs collide.
       const fetchUrl = isOtherUser
         ? `${API_ENDPOINT}/admin/cards/${validUserId}/${slug}`
-        : `${API_ENDPOINT}/cards/${slug}`;
+        : `${API_ENDPOINT}/my/cards/${slug}`;
       const res = await apiCall(fetchUrl);
       if (res.ok) {
         const json = await res.json();
@@ -1717,8 +1789,9 @@ const [settings, setSettings] = useState({
         }
 
         if (res.ok) {
-          // Clear targetUserIdForNewCard after successful save
-          setTargetUserIdForNewCard(null);
+          // Keep targetUserIdForNewCard set for the rest of this editor session so a
+          // second save (e.g. after uploading an image) still targets the same user.
+          // The value is reset on the next editor entry (handleEdit / handleCreateCardConfirm).
           setIsSuccess(true);
           fetchCardList();
           setTimeout(() => setIsSuccess(false), 2000);
@@ -3241,10 +3314,11 @@ END:VCARD`;
 
         <div className="grid grid-cols-4 gap-3 mb-8">
            <SocialIcon url={contact.website} icon={Globe} label="Web" themeColor={themeColor} />
-           <SocialIcon url={social.linkedin} icon={Linkedin} label="LinkedIn" themeColor={themeColor} />
-           <SocialIcon url={social.twitter} icon={Twitter} label="X" themeColor={themeColor} />
-           <SocialIcon url={social.instagram} icon={Instagram} label="Insta" themeColor={themeColor} />
-           <SocialIcon url={social.github} icon={Github} label="Git" themeColor={themeColor} />
+           <SocialIcon url={social.linkedin} icon={LinkedinIcon} label="LinkedIn" themeColor={themeColor} />
+           <SocialIcon url={social.twitter} icon={TwitterIcon} label="X" themeColor={themeColor} />
+           <SocialIcon url={social.instagram} icon={InstagramIcon} label="Insta" themeColor={themeColor} />
+           <SocialIcon url={social.github} icon={GithubIcon} label="Git" themeColor={themeColor} />
+           <SocialIcon url={social.matrix} icon={MatrixIcon} label="Matrix" themeColor={themeColor} />
         </div>
 
         {/* Swiish logo */}
@@ -3448,10 +3522,11 @@ function EditorView({ data, setData, onBack, onSave, slug, settings, csrfToken, 
                     />
                   </div>
                   <Input icon={Globe} placeholder="Website" value={data.contact.website} onChange={v => handleInputChange('contact', 'website', v)} type="url" />
-                  <Input icon={Linkedin} placeholder="LinkedIn" value={data.social.linkedin} onChange={v => handleInputChange('social', 'linkedin', v)} type="url" />
-                  <Input icon={Twitter} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
-                  <Input icon={Instagram} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
-                  <Input icon={Github} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
+                  <Input icon={LinkedinIcon} placeholder="LinkedIn" value={data.social.linkedin} onChange={v => handleInputChange('social', 'linkedin', v)} type="url" />
+                  <Input icon={TwitterIcon} placeholder="Twitter / X" value={data.social.twitter} onChange={v => handleInputChange('social', 'twitter', v)} type="url" />
+                  <Input icon={InstagramIcon} placeholder="Instagram" value={data.social.instagram} onChange={v => handleInputChange('social', 'instagram', v)} type="url" />
+                  <Input icon={GithubIcon} placeholder="Github" value={data.social.github} onChange={v => handleInputChange('social', 'github', v)} type="url" />
+                  <Input icon={MatrixIcon} placeholder="Matrix share URL" value={data.social.matrix || ''} onChange={v => handleInputChange('social', 'matrix', v)} type="url" />
                 </div>
              </div>
            )}
@@ -3880,7 +3955,7 @@ function SocialIcon({ url, icon: Icon, label, themeColor }) {
   const hoverColor = themeColor?.buttonStyle || themeColor?.textStyle || '#4f46e5';
   return (
     <a href={url} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-2 group">
-      <div className="w-full aspect-square rounded-card bg-surface dark:bg-surface-dark border border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary dark:text-text-secondary-dark group-hover:scale-105 transition-transform group-hover:shadow-md group-hover:text-white" style={{ '--hover-bg': hoverColor }}>
+      <div className="w-full aspect-square rounded-input bg-surface dark:bg-surface-dark border border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary dark:text-text-secondary-dark group-hover:scale-105 transition-transform group-hover:shadow-md group-hover:text-white" style={{ '--hover-bg': hoverColor }}>
         <style>{`.group:hover div { background-color: ${hoverColor}; border-color: ${hoverColor}; }`}</style>
         <Icon className="w-6 h-6" />
       </div>
@@ -3959,6 +4034,9 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
   const [newInvitation, setNewInvitation] = useState({ email: '', role: 'member' });
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  // Set when an invitation was created but no email was sent, so the link can be copied
+  const [createdInviteUrl, setCreatedInviteUrl] = useState(null);
+  const [copiedInvitationId, setCopiedInvitationId] = useState(null);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -4075,14 +4153,20 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       });
       if (res.ok) {
         const data = await res.json();
-        setIsSuccess(true);
-        setTimeout(() => setIsSuccess(false), 2000);
-        setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
 
-        // Show warning if email failed
-        if (data.status === 'failed' && showAlert) {
-          showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
+        if (data.status === 'pending' && data.invitationUrl) {
+          // No email was sent. Keep the modal open and show the link, because it is the only
+          // chance the admin has to copy it before closing.
+          setCreatedInviteUrl(data.invitationUrl);
+          if (showAlert) showAlert(data.warning || 'Invitation created but no email was sent. Copy the link to share it.', 'warning');
+        } else {
+          setIsSuccess(true);
+          setTimeout(() => setIsSuccess(false), 2000);
+          setShowInviteModal(false);
+          if (data.status === 'failed' && showAlert) {
+            showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
+          }
         }
 
         // Reload invitations list
@@ -4095,6 +4179,17 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       if (showAlert) showAlert('Error sending invitation', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Copies an invitation link. Key is the invitation id, or 'new' for the just-created invitation.
+  const handleCopyInviteLink = async (url, key) => {
+    try {
+      await copyTextToClipboard(url);
+      setCopiedInvitationId(key);
+      setTimeout(() => setCopiedInvitationId(null), 2000);
+    } catch (e) {
+      if (showAlert) showAlert('Could not copy the link. Select the link and copy it manually.', 'error');
     }
   };
 
@@ -4215,7 +4310,11 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setShowInviteModal(true)}
+              onClick={() => {
+                setCreatedInviteUrl(null);
+                setCopiedInvitationId(null);
+                setShowInviteModal(true);
+              }}
               className="px-4 py-2 bg-action dark:bg-action-dark text-white rounded-full text-sm font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark"
             >
               <Plus className="w-4 h-4" /> Invite User
@@ -4386,6 +4485,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
                             <RefreshCw className="w-3 h-3" /> Retry
                           </button>
                         )}
+                        {inv.invitationUrl && (
+                          <button
+                            onClick={() => handleCopyInviteLink(inv.invitationUrl, inv.id)}
+                            className="px-3 py-1.5 text-sm bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-badge hover:bg-surface dark:hover:bg-surface-dark flex items-center gap-1"
+                            title="Copy invitation link"
+                          >
+                            {copiedInvitationId === inv.id ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy link</>}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteInvitation(inv.id)}
                           className="px-3 py-1.5 text-sm bg-error-bg dark:bg-error-bg-dark text-error dark:text-error-text-dark rounded-badge hover:bg-error-bg dark:hover:bg-error-bg-dark flex items-center gap-1"
@@ -4474,67 +4582,109 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card dark:bg-card-dark rounded-card shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">Invite User</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
-                <input
-                  type="email"
-                  value={newInvitation.email}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                  placeholder="user@example.com"
-                />
-                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">An invitation email will be sent to this address</p>
+            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">
+              {createdInviteUrl ? 'Invitation Created' : 'Invite User'}
+            </h3>
+            {createdInviteUrl ? (
+              <div className="space-y-4">
+                <p className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                  No email was sent. Share this invitation link with the person you are inviting. It expires in 7 days.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdInviteUrl}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 min-w-0 px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopyInviteLink(createdInviteUrl, 'new')}
+                    className="px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-medium hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center gap-1 flex-shrink-0"
+                  >
+                    {copiedInvitationId === 'new' ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
-                <select
-                  value={newInvitation.role}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, role: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                >
-                  <option value="member">Member</option>
-                  <option value="owner">Owner</option>
-                </select>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={newInvitation.email}
+                    onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
+                    placeholder="user@example.com"
+                  />
+                  <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">An invitation email will be sent to this address</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
+                  <select
+                    value={newInvitation.role}
+                    onChange={(e) => setNewInvitation({ ...newInvitation, role: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
+                  >
+                    <option value="member">Member</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowInviteModal(false);
-                  setNewInvitation({ email: '', role: 'member' });
-                }}
-                className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendInvitation}
-                disabled={isSaving || isSuccess}
-                className={`flex-1 px-4 py-2.5 rounded-button font-bold flex items-center justify-center gap-2 transition-all ${
-                  isSuccess
-                    ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700'
-                    : 'bg-action dark:bg-action-dark text-white hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : isSuccess ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Sent!
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Send Invitation
-                  </>
-                )}
-              </button>
+              {createdInviteUrl ? (
+                <button
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setCreatedInviteUrl(null);
+                    setCopiedInvitationId(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark"
+                >
+                  Done
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setNewInvitation({ email: '', role: 'member' });
+                      setCreatedInviteUrl(null);
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendInvitation}
+                    disabled={isSaving || isSuccess}
+                    className={`flex-1 px-4 py-2.5 rounded-button font-bold flex items-center justify-center gap-2 transition-all ${
+                      isSuccess
+                        ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700'
+                        : 'bg-action dark:bg-action-dark text-white hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50'
+                    }`}
+                  >
+                    {isSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : isSuccess ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Sent!
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Send Invitation
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -23,6 +23,10 @@ You may NOT:
 - Remove trademark notices from the software
 - Use the Swiish trademarks in a way that suggests endorsement or affiliation without permission
 
+## Third-Party Trademarks
+
+The social media icons rendered on cards (LinkedIn, X, Instagram, GitHub, Matrix and any others added in the future) are trademarks of their respective owners. They are displayed solely to help card owners link to their own profiles on those services, which is a nominative fair use. Their inclusion does not imply endorsement of, or affiliation with, Swiish by those companies. Brand icon path data is sourced from the simple-icons project (CC0-1.0); respective brand guidelines remain the responsibility of the card owner displaying them.
+
 ## License vs. Trademark
 
 The software code in this repository is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). This license allows you to use, modify, and distribute the software code. However, this license does NOT grant permission to use the Swiish trademarks.

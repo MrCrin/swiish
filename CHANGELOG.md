@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-21
+
+### Added
+- **Matrix Contact Details**: Matrix added as a contact detail and social icon, using the official Matrix logo
+- **Official Brand Logos**: Social icons use official brand logos
+- **Trust Proxy Setting**: `TRUST_PROXY` controls how many reverse proxy hops sit in front of Swiish, so rate limits key on the visitor's IP. Defaults to `1`, as before. Addresses #71.
+- **Upload Sweep**: Uploads no longer referenced by any card or organisation setting are removed daily once they are older than 24 hours. Set `UPLOAD_SWEEP_DRY_RUN=true` to log what would be removed without deleting. Addresses #72.
+- **Own Card Endpoint**: `GET /api/my/cards/:slug` returns the signed-in user's own card
+
+### Changed
+- **Licensing**: Ship the complete, verbatim AGPL-3.0 text in `LICENSE.md` with a trade name exception notice linking to `TRADEMARKS.md`, replacing the abbreviated license file
+- **Invitations Without SMTP**: When SMTP isn't configured, an invitation is recorded as `pending` rather than `sent`, and the create response includes the invitation link so it can be shared manually. Retry is available once SMTP is configured.
+- **Slug Rules for New Cards**: A new card is rejected if its slug is reserved (app routes such as `login`, `settings`, `users`) or is exactly 7 letters and numbers (it would collide with short codes), or if another user's card already uses the slug. Existing cards are not affected. Addresses #58.
+- **Customisation Locks Exposed**: The public settings response includes the organisation's `allow_*_customisation` locks, so members see which parts of their card they can edit
+
+### Fixed
+- **Invitation Link Shown When No Email Is Sent**: When SMTP isn't configured, the invite dialog shows the invitation link with a copy button instead of closing, and pending invitations in the list have a Copy link action. The link is returned once by the API and was previously never displayed.
+- **Editor Loads Your Own Card**: The card editor loads your own card through a user-scoped route. Previously it used the public slug route, which could return another user's card when two users shared a slug, and saving then overwrote that card. Resolves #57.
+- **Card Owner Preserved on Re-save**: Re-saving another user's card (for example after an image upload) no longer reassigns it to the owner's account. From PR #54.
+- **Login Rate Limit Counts Failures Only**: Successful sign-ins no longer use up the login attempts, so people sharing an IP don't lock each other out. Resolves #70.
+- **Member Editor Respects Locks**: Members see the organisation's customisation locks, so edits the server would discard are no longer offered. Resolves #64.
+- **Service Worker Navigation**: Navigations fetch the requested page instead of the raw `/index.html`, so the CSP nonce matches and inline scripts are no longer blocked. The cache name is bumped so installed workers update. Resolves #65.
+- **Short Codes Without Look-Alike Characters**: New short codes are generated without `0 O o 1 l I`, which can't be told apart in most fonts, so a code read off a printed card or QR caption can be typed back. Existing codes keep working; lookups still accept any 7-character alphanumeric code. Resolves #76.
+- **Login Page Session Awareness**: Redirect already-authenticated users from the login page to the dashboard by checking for an active session on mount, decoupling the session check from the card-list fetch so a transient `/api/admin/cards` failure no longer lands a logged-in user on the login form. Also fixed the friendly "Please enter a valid email address" validation message (express-validator v7 renamed `param` to `path`). Resolves #37.
+
+### Technical
+- **No Database Migration**: `TRUST_PROXY` and `UPLOAD_SWEEP_DRY_RUN` are optional environment variables; existing deployments need no configuration changes
+
 ## [0.7.0] - 2026-09-11
 
 ### Added
