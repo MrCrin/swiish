@@ -53,8 +53,20 @@ function log(message, data = null) {
   });
 }
 
-// Trust proxy for rate limiting behind reverse proxy/load balancer
-app.set('trust proxy', 1);
+// Trust proxy for rate limiting behind reverse proxy/load balancer.
+// TRUST_PROXY takes Express's trust proxy values: a hop count (e.g. "1", "2"), "true", "false",
+// or a comma-separated list of trusted proxy IPs/subnets. Defaults to 1 hop.
+// Behind a CDN such as Cloudflare, set the hop count to the number of proxies between the
+// client and this server, so rate limits key on the visitor rather than the CDN edge.
+function parseTrustProxy(value) {
+  const raw = (value ?? '').trim();
+  if (raw === '') return 1;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return raw.split(',').map(entry => entry.trim()).filter(Boolean);
+}
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET'];
@@ -581,7 +593,9 @@ app.use(cookieParser());
 // Rate limiting
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  max: 5, // 5 failed attempts per window
+  // Only failed sign-ins count, so users sharing an IP (office, Wi-Fi, CGNAT) don't lock each other out
+  skipSuccessfulRequests: true,
   message: 'Too many login attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -1321,6 +1335,26 @@ app.get('/api/auth/me', requireAuth, apiLimiter, (req, res, next) => {
   );
 });
 
+// Slugs that would shadow an app route or path segment
+const RESERVED_SLUGS = new Set([
+  'api', 'admin', 'cards', 'uploads', 'manifest', 'icons', 'static', 'invite', 'invitations',
+  'login', 'logout', 'people', 'settings', 'setup', 'users', 'reset-password', 'verify-email',
+  'forgot-password', 'change-password', 'preview', 'qr', 'short', 'new', 'edit', 'profile', 'account'
+]);
+
+// Returns an error message if a new card may not claim this slug, otherwise null.
+// Existing cards are not re-checked, so this only applies when a slug is first created.
+function getNewSlugError(slug) {
+  if (RESERVED_SLUGS.has(slug)) {
+    return 'That URL is reserved. Please choose a different one.';
+  }
+  // Slugs that look like short codes collide with the /:shortCode route
+  if (/^[a-zA-Z0-9]{7}$/.test(slug)) {
+    return 'URLs must not be exactly 7 letters or numbers. Please add a hyphen or choose a different one.';
+  }
+  return null;
+}
+
 // Validation schemas
 const slugValidation = param('slug')
   .trim()
@@ -1984,6 +2018,29 @@ app.get('/api/admin/cards/:userId/:slug', apiLimiter, requireAuth, requireRole('
   );
 });
 
+// GET the signed-in user's own card (user-scoped, so it can't resolve another user's card with the same slug)
+app.get('/api/my/cards/:slug', apiLimiter, requireAuth, [
+  slugValidation
+], handleValidationErrors, (req, res, next) => {
+  const slug = req.params.slug.toLowerCase();
+
+  db.get(
+    "SELECT data, short_code FROM cards WHERE slug = ? AND user_id = ?",
+    [slug, req.user.id],
+    (err, row) => {
+      if (err) return next(err);
+      if (!row) return res.status(404).json({ error: 'Card not found' });
+      try {
+        const cardData = JSON.parse(row.data);
+        cardData._shortCode = row.short_code;
+        res.json(cardData);
+      } catch (e) {
+        next(e);
+      }
+    }
+  );
+});
+
 // SAVE/UPDATE Card
 app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
   slugValidation,
@@ -2132,25 +2189,40 @@ app.post('/api/cards/:slug', requireAuth, apiLimiter, csrfProtection, [
             res.json({ success: true, slug, shortCode: existingShortCode });
           });
         } else {
-          // Card doesn't exist or has no short code, generate one
-          ensureUniqueShortCode(db, (err, shortCode) => {
+          // Card doesn't exist or has no short code, so this slug is being claimed
+          const slugError = getNewSlugError(slug);
+          if (slugError) {
+            return res.status(400).json({ error: slugError });
+          }
+
+          // Slugs are only unique per user, but several routes resolve cards by slug alone,
+          // so refuse a slug that another user's card already holds
+          db.get("SELECT 1 FROM cards WHERE slug = ? AND user_id != ? LIMIT 1", [slug, finalTargetUserId], (err, clash) => {
             if (err) return next(err);
+            if (clash) {
+              return res.status(409).json({ error: 'That URL is already in use. Please choose a different one.' });
+            }
 
-            const jsonContent = JSON.stringify(sanitizedData);
-
-            const query = `
-              INSERT INTO cards (slug, user_id, short_code, data, updated_at)
-              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(slug, user_id) DO UPDATE SET
-                data = excluded.data,
-                short_code = COALESCE(cards.short_code, excluded.short_code),
-                updated_at = CURRENT_TIMESTAMP
-            `;
-
-            db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], async function(err) {
+            // Generate a short code for the new card
+            ensureUniqueShortCode(db, (err, shortCode) => {
               if (err) return next(err);
-              await invalidatePreviewCache(slug, shortCode);
-              res.json({ success: true, slug, shortCode });
+
+              const jsonContent = JSON.stringify(sanitizedData);
+
+              const query = `
+                INSERT INTO cards (slug, user_id, short_code, data, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(slug, user_id) DO UPDATE SET
+                  data = excluded.data,
+                  short_code = COALESCE(cards.short_code, excluded.short_code),
+                  updated_at = CURRENT_TIMESTAMP
+              `;
+
+              db.run(query, [slug, finalTargetUserId, shortCode, jsonContent], async function(err) {
+                if (err) return next(err);
+                await invalidatePreviewCache(slug, shortCode);
+                res.json({ success: true, slug, shortCode });
+              });
             });
           });
         }
@@ -2316,12 +2388,13 @@ const getOrganizationSettings = (organisationId, callback) => {
 app.get('/api/settings', apiLimiter, (req, res, next) => {
   const orgSlug = req.query.orgSlug || 'default';
   
-  // Get theme_colors, theme_variant, and default_organisation from specified organization
+  // Get theme_colors, theme_variant, default_organisation and the customisation locks from specified organization.
+  // The locks are returned so members see which parts of their card they can edit (the server enforces them on save).
   db.all(`
     SELECT os.key, os.value 
     FROM organisation_settings os
     JOIN organisations o ON os.organisation_id = o.id
-    WHERE o.slug = ? AND os.key IN ('theme_colors', 'theme_variant', 'default_organisation')
+    WHERE o.slug = ? AND os.key IN ('theme_colors', 'theme_variant', 'default_organisation', 'allow_theme_customisation', 'allow_image_customisation', 'allow_links_customisation', 'allow_privacy_customisation', 'allow_send_details_customisation')
   `, [orgSlug], (err, rows) => {
     if (err) {
       return next(err);
@@ -2338,6 +2411,8 @@ app.get('/api/settings', apiLimiter, (req, res, next) => {
           settings.theme_variant = row.value;
         } else if (row.key === 'default_organisation') {
           settings.default_organisation = row.value;
+        } else if (row.key.startsWith('allow_')) {
+          settings[row.key] = row.value === 'true';
         }
       } catch (e) {
         console.error(`Error parsing setting ${row.key}:`, e);
@@ -2354,6 +2429,10 @@ app.get('/api/settings', apiLimiter, (req, res, next) => {
     if (!settings.default_organisation) {
       settings.default_organisation = 'My Organisation';
     }
+    // Customisation locks default to allowed, matching getOrganizationSettings
+    ['allow_theme_customisation', 'allow_image_customisation', 'allow_links_customisation', 'allow_privacy_customisation', 'allow_send_details_customisation'].forEach(key => {
+      if (settings[key] === undefined) settings[key] = true;
+    });
     
     res.json(settings);
   });
@@ -2903,9 +2982,10 @@ app.post('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter
     });
     const orgName = org ? org.name : 'Organization';
 
-    // Attempt to send email
-    let emailStatus = 'sent';
-    let emailError = null;
+    // Attempt to send email. Without SMTP nothing is sent, so the invitation stays 'pending'
+    // (retryable) rather than being recorded as 'sent'.
+    let emailStatus = emailTransporter ? 'sent' : 'pending';
+    let emailError = emailTransporter ? null : 'SMTP is not configured';
 
     try {
       if (emailTransporter) {
@@ -2961,7 +3041,12 @@ app.post('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter
       invitationId,
       expiresAt: expiresAt.toISOString(),
       status: emailStatus,
-      ...(emailError && { warning: 'Invitation created but email failed to send. You can retry from the admin panel.' })
+      ...(emailStatus === 'pending' && {
+        // Returned so the admin can share the link manually when no email was sent
+        invitationUrl: `${APP_URL}/invite/${token}`,
+        warning: 'Invitation created but SMTP is not configured, so no email was sent. Copy the invitation link and share it manually.'
+      }),
+      ...(emailStatus === 'failed' && { warning: 'Invitation created but email failed to send. You can retry from the admin panel.' })
     });
 
   } catch (err) {
@@ -3221,9 +3306,9 @@ app.post('/api/admin/invitations/:invitationId/retry', requireAuth, requireRole(
       return res.status(400).json({ error: 'Invitation has expired. Please delete and create a new one.' });
     }
 
-    // Attempt to send email
-    let emailStatus = 'sent';
-    let emailError = null;
+    // Attempt to send email. Without SMTP the invitation stays 'pending' rather than 'sent'.
+    let emailStatus = emailTransporter ? 'sent' : 'pending';
+    let emailError = emailTransporter ? null : 'SMTP is not configured';
 
     try {
       if (emailTransporter) {
@@ -3276,7 +3361,8 @@ app.post('/api/admin/invitations/:invitationId/retry', requireAuth, requireRole(
     res.json({
       success: emailStatus === 'sent',
       status: emailStatus,
-      ...(emailError && { error: 'Email failed to send. Please check SMTP configuration.' })
+      ...(emailStatus === 'pending' && { error: 'SMTP is not configured, so no email was sent.' }),
+      ...(emailStatus === 'failed' && { error: 'Email failed to send. Please check SMTP configuration.' })
     });
 
   } catch (err) {
@@ -4528,6 +4614,74 @@ async function runMigrations() {
   }
 }
 
+// Uploads removed from a card or setting are only deleted here, not at delete time: the same
+// file can be referenced from more than one place, and every delete path would need to clean up.
+const UPLOAD_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+const UPLOAD_SWEEP_GRACE_MS = 24 * 60 * 60 * 1000; // keeps uploads that haven't been saved yet
+const UPLOAD_SWEEP_DRY_RUN = process.env.UPLOAD_SWEEP_DRY_RUN === 'true';
+
+// Deletes files in uploads/ that no card or organisation setting references any more.
+// Files newer than the grace period are kept, so an upload that hasn't been saved yet survives.
+// Demo files and dotfiles are never removed.
+function sweepOrphanedUploads({ dryRun = UPLOAD_SWEEP_DRY_RUN, graceMs = UPLOAD_SWEEP_GRACE_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    let files;
+    try {
+      files = fs.readdirSync(UPLOADS_DIR);
+    } catch (err) {
+      return reject(err);
+    }
+
+    // Every text column that can hold an upload URL (card JSON and organisation settings)
+    db.all(
+      "SELECT data AS text FROM cards UNION ALL SELECT value AS text FROM organisation_settings",
+      [],
+      (err, rows) => {
+        if (err) return reject(err);
+
+        const referenced = new Set();
+        const uploadUrl = /\/uploads\/([^\s"'<>\\?#]+)/g;
+        for (const row of rows) {
+          for (const match of String(row.text || '').matchAll(uploadUrl)) {
+            referenced.add(match[1]);
+          }
+        }
+
+        const cutoff = Date.now() - graceMs;
+        const removed = [];
+        for (const file of files) {
+          if (file.startsWith('.') || file.startsWith('demo-') || referenced.has(file)) continue;
+          const filePath = path.join(UPLOADS_DIR, file);
+          try {
+            const stat = fs.statSync(filePath);
+            if (!stat.isFile() || stat.mtimeMs > cutoff) continue;
+            if (!dryRun) fs.unlinkSync(filePath);
+            removed.push(file);
+          } catch (fileErr) {
+            console.error(`[Uploads] Could not remove ${file}:`, fileErr.message);
+          }
+        }
+
+        resolve({ dryRun, removed });
+      }
+    );
+  });
+}
+
+function startUploadSweep() {
+  const run = () => {
+    sweepOrphanedUploads()
+      .then(({ dryRun, removed }) => {
+        if (removed.length > 0) {
+          console.log(`[Uploads] ${dryRun ? 'Would remove' : 'Removed'} ${removed.length} unreferenced file(s)`);
+        }
+      })
+      .catch(err => console.error('[Uploads] Sweep failed:', err.message));
+  };
+  run();
+  setInterval(run, UPLOAD_SWEEP_INTERVAL_MS).unref();
+}
+
 // Run migrations and start server
 // IMPORTANT: Wait for migrations to complete before accepting requests
 // This ensures DEMO_USER_ID is set before auth middleware runs in demo mode
@@ -4542,6 +4696,7 @@ async function runMigrations() {
       if (NODE_ENV === 'production') {
         console.log('HTTPS enforcement and security features enabled');
       }
+      startUploadSweep();
     });
 
     // Graceful shutdown handler to close database connection

@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/MrCrin/swiish/master/public/graphics/Swiish_Logo_DarkBg.svg" alt="Swiish Logo" width="200">
 </p></br>
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/MrCrin/swiish/releases)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](https://github.com/MrCrin/swiish/releases)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](https://opensource.org/licenses/AGPL-3.0)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![Docker Image](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml/badge.svg)](https://github.com/MrCrin/swiish/actions/workflows/build_docker_on_release.yml)
@@ -105,6 +105,8 @@ All configuration is done via environment variables. Copy `.env.example` to `.en
 - **`ALLOWED_ORIGINS`** - Comma-separated list of allowed CORS origins
 - **`MAX_FILE_SIZE`** - Maximum file upload size in bytes (default: 5MB)
 - **`FORCE_HTTPS`** - Force HTTPS redirects (`true` or `false`)
+- **`TRUST_PROXY`** - Number of reverse proxy hops in front of Swiish, so rate limits use the visitor's IP (default: `1`; use `2` behind Cloudflare plus a reverse proxy)
+- **`UPLOAD_SWEEP_DRY_RUN`** - Log unreferenced uploads that would be removed without deleting them (default: `false`)
 - **Email Configuration (SMTP)** - For email features like invitations
 
 See `.env.example` for all available options and their descriptions.
