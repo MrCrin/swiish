@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Customisation Locks Exposed**: The public settings response includes the organisation's `allow_*_customisation` locks, so members see which parts of their card they can edit
 
 ### Fixed
+- **Invitation Link Shown When No Email Is Sent**: When SMTP isn't configured, the invite dialog shows the invitation link with a copy button instead of closing, and pending invitations in the list have a Copy link action. The link is returned once by the API and was previously never displayed.
 - **Editor Loads Your Own Card**: The card editor loads your own card through a user-scoped route. Previously it used the public slug route, which could return another user's card when two users shared a slug, and saving then overwrote that card. Resolves #57.
 - **Card Owner Preserved on Re-save**: Re-saving another user's card (for example after an image upload) no longer reassigns it to the owner's account. From PR #54.
 - **Login Rate Limit Counts Failures Only**: Successful sign-ins no longer use up the login attempts, so people sharing an IP don't lock each other out. Resolves #70.

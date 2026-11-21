@@ -3196,6 +3196,7 @@ app.get('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter,
       i.created_at,
       i.expires_at,
       i.accepted_at,
+      i.token,
       u.email as invited_by_email
     FROM invitations i
     LEFT JOIN users u ON i.invited_by = u.id
@@ -3204,7 +3205,13 @@ app.get('/api/admin/invitations', requireAuth, requireRole('owner'), apiLimiter,
     [req.user.organisationId],
     (err, invitations) => {
       if (err) return next(err);
-      res.json({ invitations });
+      // invitationUrl lets owners copy a pending invitation link when no email could be sent
+      res.json({
+        invitations: invitations.map(({ token, ...invitation }) => ({
+          ...invitation,
+          invitationUrl: token ? `${APP_URL}/invite/${token}` : null
+        }))
+      });
     }
   );
 });

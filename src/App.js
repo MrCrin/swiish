@@ -11,7 +11,7 @@ import {
   Plus, Trash2, ArrowLeft, Users, ExternalLink, RefreshCw,
   Download, FileText, Calendar, Video, Music, ShoppingCart,
   Link as LinkIcon, Youtube, Facebook, MessageCircle, Sun, Moon,
-  ChevronUp, ChevronDown, GripVertical, Settings
+  ChevronUp, ChevronDown, GripVertical, Settings, Copy
 } from 'lucide-react';
 import { siX, siInstagram, siGithub, siMatrix } from 'simple-icons';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
@@ -107,6 +107,26 @@ const applyThemeCssVars = (variant) => {
 
 // --- QR PAYLOAD STORAGE KEYS ---
 const QR_STORAGE_KEY = 'swiish:lastQrPayload';
+
+// Copies text to the clipboard, falling back to a hidden textarea where the Clipboard API is unavailable
+const copyTextToClipboard = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
 
 // Build a vCard string for QR code encoding (simplified for reliable scanning)
 // When scanned, this will add the contact directly to the phone
@@ -4014,6 +4034,9 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
   const [newInvitation, setNewInvitation] = useState({ email: '', role: 'member' });
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  // Set when an invitation was created but no email was sent, so the link can be copied
+  const [createdInviteUrl, setCreatedInviteUrl] = useState(null);
+  const [copiedInvitationId, setCopiedInvitationId] = useState(null);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -4130,16 +4153,20 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       });
       if (res.ok) {
         const data = await res.json();
-        setIsSuccess(true);
-        setTimeout(() => setIsSuccess(false), 2000);
-        setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
 
-        // Show warning if email failed or was not sent (no SMTP configured)
-        if (data.status === 'failed' && showAlert) {
-          showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
-        } else if (data.status === 'pending' && showAlert) {
-          showAlert(data.warning || 'Invitation created but no email was sent. Share the invitation link manually.', 'warning');
+        if (data.status === 'pending' && data.invitationUrl) {
+          // No email was sent. Keep the modal open and show the link, because it is the only
+          // chance the admin has to copy it before closing.
+          setCreatedInviteUrl(data.invitationUrl);
+          if (showAlert) showAlert(data.warning || 'Invitation created but no email was sent. Copy the link to share it.', 'warning');
+        } else {
+          setIsSuccess(true);
+          setTimeout(() => setIsSuccess(false), 2000);
+          setShowInviteModal(false);
+          if (data.status === 'failed' && showAlert) {
+            showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
+          }
         }
 
         // Reload invitations list
@@ -4152,6 +4179,17 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       if (showAlert) showAlert('Error sending invitation', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Copies an invitation link. Key is the invitation id, or 'new' for the just-created invitation.
+  const handleCopyInviteLink = async (url, key) => {
+    try {
+      await copyTextToClipboard(url);
+      setCopiedInvitationId(key);
+      setTimeout(() => setCopiedInvitationId(null), 2000);
+    } catch (e) {
+      if (showAlert) showAlert('Could not copy the link. Select the link and copy it manually.', 'error');
     }
   };
 
@@ -4272,7 +4310,11 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setShowInviteModal(true)}
+              onClick={() => {
+                setCreatedInviteUrl(null);
+                setCopiedInvitationId(null);
+                setShowInviteModal(true);
+              }}
               className="px-4 py-2 bg-action dark:bg-action-dark text-white rounded-full text-sm font-bold flex items-center gap-2 hover:bg-action-hover dark:hover:bg-action-hover-dark"
             >
               <Plus className="w-4 h-4" /> Invite User
@@ -4443,6 +4485,15 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
                             <RefreshCw className="w-3 h-3" /> Retry
                           </button>
                         )}
+                        {inv.invitationUrl && (
+                          <button
+                            onClick={() => handleCopyInviteLink(inv.invitationUrl, inv.id)}
+                            className="px-3 py-1.5 text-sm bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-badge hover:bg-surface dark:hover:bg-surface-dark flex items-center gap-1"
+                            title="Copy invitation link"
+                          >
+                            {copiedInvitationId === inv.id ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy link</>}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteInvitation(inv.id)}
                           className="px-3 py-1.5 text-sm bg-error-bg dark:bg-error-bg-dark text-error dark:text-error-text-dark rounded-badge hover:bg-error-bg dark:hover:bg-error-bg-dark flex items-center gap-1"
@@ -4531,67 +4582,109 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-card dark:bg-card-dark rounded-card shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">Invite User</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
-                <input
-                  type="email"
-                  value={newInvitation.email}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                  placeholder="user@example.com"
-                />
-                <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">An invitation email will be sent to this address</p>
+            <h3 className="text-lg font-bold text-text-primary dark:text-text-primary-dark mb-4">
+              {createdInviteUrl ? 'Invitation Created' : 'Invite User'}
+            </h3>
+            {createdInviteUrl ? (
+              <div className="space-y-4">
+                <p className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                  No email was sent. Share this invitation link with the person you are inviting. It expires in 7 days.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdInviteUrl}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 min-w-0 px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopyInviteLink(createdInviteUrl, 'new')}
+                    className="px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-medium hover:bg-action-hover dark:hover:bg-action-hover-dark flex items-center gap-1 flex-shrink-0"
+                  >
+                    {copiedInvitationId === 'new' ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
-                <select
-                  value={newInvitation.role}
-                  onChange={(e) => setNewInvitation({ ...newInvitation, role: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
-                >
-                  <option value="member">Member</option>
-                  <option value="owner">Owner</option>
-                </select>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={newInvitation.email}
+                    onChange={(e) => setNewInvitation({ ...newInvitation, email: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
+                    placeholder="user@example.com"
+                  />
+                  <p className="text-xs text-text-muted dark:text-text-muted-dark mt-1">An invitation email will be sent to this address</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-text-primary dark:text-text-secondary-dark mb-2 block">Role</label>
+                  <select
+                    value={newInvitation.role}
+                    onChange={(e) => setNewInvitation({ ...newInvitation, role: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-input border border-border dark:border-border-dark bg-input-bg dark:bg-input-bg-dark text-text-primary dark:text-text-primary-dark focus:outline-none focus:ring-2 focus:ring-2 focus:ring-focus-ring dark:focus:ring-focus-ring-dark focus:border-action dark:focus:border-action-dark"
+                  >
+                    <option value="member">Member</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowInviteModal(false);
-                  setNewInvitation({ email: '', role: 'member' });
-                }}
-                className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendInvitation}
-                disabled={isSaving || isSuccess}
-                className={`flex-1 px-4 py-2.5 rounded-button font-bold flex items-center justify-center gap-2 transition-all ${
-                  isSuccess
-                    ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700'
-                    : 'bg-action dark:bg-action-dark text-white hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : isSuccess ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Sent!
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Send Invitation
-                  </>
-                )}
-              </button>
+              {createdInviteUrl ? (
+                <button
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setCreatedInviteUrl(null);
+                    setCopiedInvitationId(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-action dark:bg-action-dark text-white rounded-button font-bold hover:bg-action-hover dark:hover:bg-action-hover-dark"
+                >
+                  Done
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setNewInvitation({ email: '', role: 'member' });
+                      setCreatedInviteUrl(null);
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-surface dark:bg-surface-dark text-text-primary dark:text-text-secondary-dark rounded-button font-medium hover:bg-surface dark:hover:bg-surface-dark"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendInvitation}
+                    disabled={isSaving || isSuccess}
+                    className={`flex-1 px-4 py-2.5 rounded-button font-bold flex items-center justify-center gap-2 transition-all ${
+                      isSuccess
+                        ? 'bg-green-500 dark:bg-green-600 text-white hover:bg-green-600 dark:hover:bg-green-700'
+                        : 'bg-action dark:bg-action-dark text-white hover:bg-action-hover dark:hover:bg-action-hover-dark disabled:opacity-50'
+                    }`}
+                  >
+                    {isSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : isSuccess ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Sent!
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Send Invitation
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
