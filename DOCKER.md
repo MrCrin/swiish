@@ -62,6 +62,8 @@ You can configure Swiish using environment variables.
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. | `http://localhost:3000,http://localhost:8095` |
 | `MAX_FILE_SIZE` | Max upload size in bytes. | `5242880` (5MB) |
 | `FORCE_HTTPS` | Force HTTPS redirects. | `false` |
+| `TRUST_PROXY` | Number of reverse proxy hops in front of Swiish (use `2` behind Cloudflare plus a reverse proxy). | `1` |
+| `UPLOAD_SWEEP_DRY_RUN` | Log unreferenced uploads that would be removed without deleting them. | `false` |
 
 #### Email Configuration (Optional)
 Required for sending invitations and password resets.

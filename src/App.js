@@ -1337,7 +1337,13 @@ const [settings, setSettings] = useState({
           theme_variant: mergedVariant,
           theme_colors: (settingsData.theme_colors && Array.isArray(settingsData.theme_colors)) 
             ? initializeColorDataForSettings(settingsData.theme_colors)
-            : THEME_PRESETS.swiish
+            : THEME_PRESETS.swiish,
+          // Customisation locks: members need these so the editor only offers edits the server will keep
+          allow_theme_customisation: settingsData.allow_theme_customisation !== false,
+          allow_image_customisation: settingsData.allow_image_customisation !== false,
+          allow_links_customisation: settingsData.allow_links_customisation !== false,
+          allow_privacy_customisation: settingsData.allow_privacy_customisation !== false,
+          allow_send_details_customisation: settingsData.allow_send_details_customisation !== false
         };
         
         // Set state and apply theme immediately (same pattern as fetchSettings)
@@ -1668,9 +1674,11 @@ const [settings, setSettings] = useState({
       // User IDs are UUID strings (crypto.randomUUID()). Guard against null/undefined/non-string values.
       const validUserId = userId && typeof userId === 'string' && userId.trim() ? userId : null;
       const isOtherUser = validUserId !== null && validUserId !== currentUserId;
+      // Always load through an authenticated, user-scoped route. The public /cards/:slug route
+      // resolves by slug alone, so it can return another user's card when slugs collide.
       const fetchUrl = isOtherUser
         ? `${API_ENDPOINT}/admin/cards/${validUserId}/${slug}`
-        : `${API_ENDPOINT}/cards/${slug}`;
+        : `${API_ENDPOINT}/my/cards/${slug}`;
       const res = await apiCall(fetchUrl);
       if (res.ok) {
         const json = await res.json();
@@ -4127,9 +4135,11 @@ function UserManagementView({ apiCall, userRole, onBack, showAlert, showConfirm 
         setShowInviteModal(false);
         setNewInvitation({ email: '', role: 'member' });
 
-        // Show warning if email failed
+        // Show warning if email failed or was not sent (no SMTP configured)
         if (data.status === 'failed' && showAlert) {
           showAlert('Invitation created but email failed to send. You can retry from the invitations list below.', 'warning');
+        } else if (data.status === 'pending' && showAlert) {
+          showAlert(data.warning || 'Invitation created but no email was sent. Share the invitation link manually.', 'warning');
         }
 
         // Reload invitations list
